@@ -1,152 +1,168 @@
+using Unity.Cinemachine;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [RequireComponent(typeof(CharacterController))]
 public class ThirdPersonController : MonoBehaviour
 {
-    [Header("Components")]
-    [SerializeField] private CharacterController controller;
-    [SerializeField] private Camera playerCamera;
-
-    [Header("Movement Settings")]
-    [SerializeField] private float runAcceleration = 50f;
-    [SerializeField] private float runSpeed = 4f;
-    [SerializeField] private float drag = 20f;
-    [SerializeField] private float jumpForce = 5f;
-    [SerializeField] private float gravity = -9.81f;
-
-    [Header("Camera Settings")]
-    [SerializeField] private float lookSensitivityH = 0.1f;
-    [SerializeField] private float lookSensitivityV = 0.1f;
-    [SerializeField] private float lookLimitV = 89f;
-
-    [Header("Ground Check")]
-    [SerializeField] private LayerMask groundMask;
-    [SerializeField] private float groundCheckDistance = 0.4f;
-    [SerializeField] private float groundCheckRadius = 0.4f;
-    [SerializeField] private Color groundCheckGizmoColor = Color.red;
-
-    // Camera control
-    private Vector2 _cameraRotation = Vector2.zero;
-    private Vector2 _playerTargetRotation = Vector2.zero;
+    [Header("Movement")]
+    [SerializeField] private float walkSpeed = 7f;
+    [SerializeField] private float sprintSpeed = 10f;
+    [SerializeField] private float acceleration = 10f;
+    [SerializeField] private float deceleration = 15f;
+    [SerializeField] private float rotationSpeed = 720f;
+    [SerializeField] private float jumpForce = 8f;
+    [SerializeField] private float gravity = -20f;
+    [SerializeField] private float groundedGravity = -2f;
     
-    // Ground check
-    private Vector3 _spherePosition;
+    [Header("Ground Check")]
+    [SerializeField] private float groundCheckRadius = 0.45f;
+    [SerializeField] private Vector3 groundCheckOffset = new Vector3(0, 0.2f, 0);
+    [SerializeField] private LayerMask groundLayer = 1;
+    [SerializeField] private Color groundCheckGizmoColor = Color.red;
+    
+    [Header("Camera")]
+    [SerializeField] private float sprintFovMultiplier = 1.2f;
+    [SerializeField] private CinemachineCamera cinemachineCamera;
+    
+    
+    private CharacterController _controller;
     private bool _isGrounded;
+    private float _defaultFov;
+    private Quaternion _targetRotation;
+    private Vector3 _moveDirection;
+    private Vector3 _verticalVelocity;
+    private Vector3 _lastMoveDirection;
+    private float _currentMoveSpeed;
+    private float _targetMoveSpeed;
+    
+    
+    private float _horizontalInput;
+    private float _verticalInput;
+    private bool _jumpInput;
+    private bool _sprintInput;
 
     private void Awake()
     {
-        controller = GetComponent<CharacterController>();
-        if (playerCamera == null)
-            playerCamera = Camera.main;
-
-        // Lock and hide cursor
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+        
+        if (cinemachineCamera)
+        {
+            _defaultFov = cinemachineCamera.Lens.FieldOfView;
+        }
+        _controller = GetComponent<CharacterController>();
     }
 
     private void Update()
     {
-        HandleGroundCheck();
+        GetPlayerInput();
+        CheckGrounded();
+        UpdateFov();
+        
+        HandleJump();
+        HandleGravity();
         HandleMovement();
     }
 
-    private void LateUpdate()
+    private void GetPlayerInput()
     {
-        HandleCameraRotation();
+        _horizontalInput = Input.GetAxisRaw("Horizontal");
+        _verticalInput = Input.GetAxisRaw("Vertical");
+        _jumpInput = Input.GetButtonDown("Jump");
+        _sprintInput = Input.GetKey(KeyCode.LeftShift);
     }
 
-    private void HandleGroundCheck()
+    private void CheckGrounded()
     {
-        _spherePosition = transform.position;
+        Vector3 spherePosition = transform.position + groundCheckOffset;
+        _isGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
+    }
 
-        _isGrounded = Physics.SphereCast(
-            _spherePosition,
-            groundCheckRadius,
-            Vector3.down,
-            out RaycastHit hit,
-            groundCheckDistance,
-            groundMask);
+    private void HandleGravity()
+    {
+        if (_isGrounded && _verticalVelocity.y < 0)
+        {
+            _verticalVelocity.y = groundedGravity;
+        }
+        else
+        {
+            _verticalVelocity.y += gravity * Time.deltaTime;
+        }
+
+        _controller.Move(_verticalVelocity * Time.deltaTime);
+    }
+    
+    private void HandleJump()
+    {
+        if (_isGrounded && _jumpInput)
+        {
+            _verticalVelocity.y = jumpForce;
+        }
     }
 
     private void HandleMovement()
     {
-        // Get input
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        float vertical = Input.GetAxisRaw("Vertical");
-        Vector2 movementInput = new Vector2(horizontal, vertical);
+        if (!cinemachineCamera) return;
+    
+        Vector3 forward = cinemachineCamera.transform.forward;
+        Vector3 right = cinemachineCamera.transform.right;
 
-        // Get camera-relative directions
-        Vector3 cameraForwardXZ = new Vector3(playerCamera.transform.forward.x, 0f, playerCamera.transform.forward.z).normalized;
-        Vector3 cameraRightXZ = new Vector3(playerCamera.transform.right.x, 0f, playerCamera.transform.right.z).normalized;
+        forward.y = 0;
+        right.y = 0;
+        forward.Normalize();
+        right.Normalize();
 
-        // Calculate movement direction relative to camera
-        Vector3 movementDirection = cameraRightXZ * movementInput.x + cameraForwardXZ * movementInput.y;
-
-        // Apply acceleration
-        Vector3 movementDelta = movementDirection * runAcceleration * Time.deltaTime;
-        Vector3 newVelocity = controller.velocity + movementDelta;
-
-        // Apply drag
-        Vector3 currentDrag = newVelocity.normalized * drag * Time.deltaTime;
-        newVelocity = (newVelocity.magnitude > drag * Time.deltaTime) ? newVelocity - currentDrag : Vector3.zero;
-
-        // Clamp to max speed
-        newVelocity = Vector3.ClampMagnitude(newVelocity, runSpeed);
-
-        // Handle jumping and gravity
-        if (_isGrounded)
+        Vector3 input = (forward * _verticalInput + right * _horizontalInput).normalized;
+    
+        // Calculate target speed based on input and sprint state
+        float targetMaxSpeed = _sprintInput ? sprintSpeed : walkSpeed;
+    
+        if (input.magnitude > 0)
         {
-            // Reset vertical velocity when grounded
-            if (newVelocity.y < 0)
-            {
-                newVelocity.y = -2f; // Small downward force to maintain ground contact
-            }
-
-            // Jump when space is pressed
-            if (Input.GetButtonDown("Jump"))
-            {
-                newVelocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
-            }
-        }
+            // Store the movement direction when there is input
+            _lastMoveDirection = input;
+            _moveDirection = input;
         
-        // Apply gravity
-        newVelocity.y += gravity * Time.deltaTime;
+            // Accelerate
+            _currentMoveSpeed = Mathf.MoveTowards(_currentMoveSpeed, targetMaxSpeed, acceleration * Time.deltaTime);
+        
+            // Handle rotation
+            _targetRotation = Quaternion.LookRotation(_moveDirection);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                _targetRotation,
+                rotationSpeed * Time.deltaTime
+            );
+        }
+        else
+        {
+            // Use the last valid direction for deceleration
+            _moveDirection = _lastMoveDirection;
+        
+            // Decelerate when no input
+            _currentMoveSpeed = Mathf.MoveTowards(_currentMoveSpeed, 0, deceleration * Time.deltaTime);
+        }
 
-        // Move character
-        controller.Move(newVelocity * Time.deltaTime);
+        // Apply movement with current speed
+        _controller.Move(_moveDirection * (_currentMoveSpeed * Time.deltaTime));
     }
-
-    private void HandleCameraRotation()
+    
+    
+    private void UpdateFov()
     {
-        // Get mouse input
-        float mouseX = Input.GetAxis("Mouse X");
-        float mouseY = Input.GetAxis("Mouse Y");
-
-        // Update camera rotation
-        _cameraRotation.x += lookSensitivityH * mouseX;
-        _cameraRotation.y = Mathf.Clamp(_cameraRotation.y - lookSensitivityV * mouseY, -lookLimitV, lookLimitV);
-
-        // Update player rotation (only Y axis)
-        _playerTargetRotation.x = transform.eulerAngles.y + lookSensitivityH * mouseX;
-        transform.rotation = Quaternion.Euler(0f, _playerTargetRotation.x, 0f);
-
-        // Update camera rotation (both X and Y axis)
-        playerCamera.transform.rotation = Quaternion.Euler(_cameraRotation.y, _cameraRotation.x, 0f);
+        if (cinemachineCamera)
+        {
+            float speedRatio = Mathf.InverseLerp(walkSpeed, sprintSpeed, _currentMoveSpeed);
+            float targetFov = Mathf.Lerp(_defaultFov, _defaultFov * sprintFovMultiplier, speedRatio);
+            cinemachineCamera.Lens.FieldOfView = targetFov;
+        }
     }
 
     private void OnDrawGizmos()
     {
-        Vector3 position = Application.isPlaying ? _spherePosition : transform.position;
-        
-        // Draw the sphere at the start position
         Gizmos.color = groundCheckGizmoColor;
-        Gizmos.DrawWireSphere(position, groundCheckRadius);
-        
-        // Draw a line showing the sweep path
-        Vector3 endPosition = position + Vector3.down * groundCheckDistance;
-        Gizmos.DrawLine(position, endPosition);
-        
-        // Draw the sphere at the end position
-        Gizmos.DrawWireSphere(endPosition, groundCheckRadius);
+        Vector3 spherePosition = transform.position + groundCheckOffset;
+        Gizmos.DrawWireSphere(spherePosition, groundCheckRadius);
     }
 }
