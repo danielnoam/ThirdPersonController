@@ -7,11 +7,10 @@ using CinemachineCamera = Unity.Cinemachine.CinemachineCamera;
 public class ThirdPersonController : MonoBehaviour
 {
     [Header("Movement")]
-    [SerializeField] private float walkSpeed = 2f;
-    [SerializeField] private float sprintSpeed = 7f;
+    [SerializeField] private float walkSpeed = 4f;
+    [SerializeField] private float sprintSpeed = 11f;
     [SerializeField] private float acceleration = 10f;
     [SerializeField] private float deceleration = 15f;
-    [SerializeField] private float rotationSpeed = 720f;
     [SerializeField] private float turnSmoothTime = 0.2f;
     [SerializeField] private float jumpForce = 8f;
     [SerializeField] private float gravity = -20f;
@@ -27,11 +26,9 @@ public class ThirdPersonController : MonoBehaviour
     [SerializeField] private CinemachineCamera cinemachineCamera;
 
     [Header("Animation")]
-    [SerializeField] private float maxWalkVelocity = 0.5f;
-    [SerializeField] private float maxRunVelocity = 2.0f;
-    [SerializeField] private float turnThreshold = 150f;
-    [SerializeField] private float animationSmoothing = 10f;
-    [SerializeField] private float turnAnimationDuration = 0.5f;
+    [SerializeField] private float maxWalkVelocity = 5f;
+    [SerializeField] private float maxRunVelocity = 10f;
+    [SerializeField] private float animationSmoothing = 2f;
     
     private CharacterController _controller;
     private Animator _animator;
@@ -39,20 +36,16 @@ public class ThirdPersonController : MonoBehaviour
     private float _defaultFov;
     private Vector3 _moveDirection;
     private Vector3 _verticalVelocity;
-    private Vector3 _previousMoveDirection;
     private float _currentMoveSpeed;
-    
+    private float _smoothedMoveSpeed;
+    private float _turnSmoothVelocity;
     
     // Animation    
-    private int _velocityZHash;
-    private int _velocityXHash;
-    private int _turnAmountHash;
-    private float _velocityZ;
-    private float _velocityX;
-    private float _turnAmount;
-    private float _lastInputMagnitude;
-    private float _turnResetTimer;
-    private float _turnSmoothVelocity;
+    private int _moveSpeedHash;
+    private int _turnTriggerHash;
+    private int _isRunningHash;
+    private Vector2 _lastInputDirection;
+    
     
     // Input variables
     private float _horizontalInput;
@@ -67,12 +60,9 @@ public class ThirdPersonController : MonoBehaviour
         _animator = GetComponent<Animator>();
         
         // Cache animation hashes
-        _velocityZHash = Animator.StringToHash("Velocity Z");
-        _velocityXHash = Animator.StringToHash("Velocity X");
-        _turnAmountHash = Animator.StringToHash("TurnAmount");
-        
-        // Initialize
-        _previousMoveDirection = transform.forward;
+        _moveSpeedHash = Animator.StringToHash("MoveSpeed");
+        _turnTriggerHash = Animator.StringToHash("TurnTrigger");
+        _isRunningHash = Animator.StringToHash("IsRunning");
         
         if (cinemachineCamera)
         {
@@ -170,65 +160,34 @@ public class ThirdPersonController : MonoBehaviour
 
     private void UpdateAnimations()
     {
+        Vector2 currentInput = new Vector2(_horizontalInput, _verticalInput);
+        
+        // Check for sharp turns when we have input
+        if (currentInput.magnitude > 0.1f && _lastInputDirection.magnitude > 0.1f)
+        {
+            float angle = Vector2.Angle(_lastInputDirection, currentInput);
+            
+            // If sharp turn detected
+            if (angle > 150f)
+            {
+                // Set whether we're running, then trigger the turn
+                _animator.SetBool(_isRunningHash, _sprintInput);
+                _animator.SetTrigger(_turnTriggerHash);
+            }
+        }
+        
+        // Store current input for next frame
+        _lastInputDirection = currentInput;
+
+        // Update regular movement animation
         float currentMaxVelocity = _sprintInput ? maxRunVelocity : maxWalkVelocity;
-        Vector2 input = new Vector2(_horizontalInput, _verticalInput);
-        float inputMagnitude = input.magnitude;
+        float normalizedSpeed = _currentMoveSpeed / (_sprintInput ? sprintSpeed : walkSpeed);
+        float targetAnimationSpeed = normalizedSpeed * currentMaxVelocity;
         
-        // Check for direction change only when moving
-        if (inputMagnitude > 0.1f)
-        {
-            Vector3 currentMoveDirection = new Vector3(input.x, 0, input.y).normalized;
-            
-            // Only check for turns if we were already moving
-            if (_lastInputMagnitude > 0.1f)
-            {
-                float turnAngle = Vector3.Angle(_previousMoveDirection, currentMoveDirection);
-                
-                // Check if input direction reversed
-                float dotProduct = Vector3.Dot(_previousMoveDirection, currentMoveDirection);
-                if (turnAngle > turnThreshold && dotProduct < 0)
-                {
-                    // Trigger turn
-                    _turnAmount = 1f;
-                    _turnResetTimer = turnAnimationDuration;
-                }
-            }
-            
-            _previousMoveDirection = currentMoveDirection;
-            
-            // Calculate target velocities - ensure they reach max values
-            Vector2 normalizedInput = input.normalized;
-            float targetVelocityX = normalizedInput.x * currentMaxVelocity;
-            float targetVelocityZ = normalizedInput.y * currentMaxVelocity;
-            
-            // Faster acceleration to reach targets
-            _velocityX = Mathf.MoveTowards(_velocityX, targetVelocityX, Time.deltaTime * currentMaxVelocity * animationSmoothing);
-            _velocityZ = Mathf.MoveTowards(_velocityZ, targetVelocityZ, Time.deltaTime * currentMaxVelocity * animationSmoothing);
-        }
-        else
-        {
-            // Quick deceleration to zero
-            _velocityX = Mathf.MoveTowards(_velocityX, 0f, Time.deltaTime * currentMaxVelocity * animationSmoothing);
-            _velocityZ = Mathf.MoveTowards(_velocityZ, 0f, Time.deltaTime * currentMaxVelocity * animationSmoothing);
-        }
+        _smoothedMoveSpeed = Mathf.MoveTowards(_smoothedMoveSpeed, targetAnimationSpeed, 
+            Time.deltaTime * currentMaxVelocity * animationSmoothing);
         
-        // Handle turn animation timing
-        if (_turnResetTimer > 0)
-        {
-            _turnResetTimer -= Time.deltaTime;
-            if (_turnResetTimer <= 0)
-            {
-                _turnAmount = 0f;
-            }
-        }
-        
-        // Store current input magnitude for next frame
-        _lastInputMagnitude = inputMagnitude;
-        
-        // Update animator with all values
-        _animator.SetFloat(_velocityXHash, _velocityX);
-        _animator.SetFloat(_velocityZHash, _velocityZ);
-        _animator.SetFloat(_turnAmountHash, _turnAmount);
+        _animator.SetFloat(_moveSpeedHash, _smoothedMoveSpeed);
     }
     
     private void UpdateFov()
