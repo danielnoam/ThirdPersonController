@@ -1,3 +1,4 @@
+using System;
 using Unity.Cinemachine;
 using UnityEngine;
 
@@ -5,11 +6,12 @@ public class AnotherThirdPersonController : MonoBehaviour
 {
     
 
+
     [Header("Movement")]
     public Transform cameraObject;
     public float walkSpeed = 4f;
-    public  float runSpeed = 7f;
-    public float sprintSpeed = 10f;
+    public  float runSpeed = 8f;
+    public float sprintSpeed = 15f;
     public float acceleration = 3f;
     public float rotationSpeed = 15f;
     public float jumpForce = 8f;
@@ -27,11 +29,15 @@ public class AnotherThirdPersonController : MonoBehaviour
     private CharacterController _controller;
     private Animator _animator;
     private bool _isGrounded;
+    private bool _isSprinting;
+    private bool _isJumping;
+    private bool _isLocked;
     private Vector3 _moveDirection;
     private Vector3 _verticalVelocity;
     private float _currentMoveSpeed;
     private float _targetMoveSpeed;
     private float _moveAmount;
+    private float _inAirTimer;
     
     
     private float _horizontalInput;
@@ -41,6 +47,8 @@ public class AnotherThirdPersonController : MonoBehaviour
     
     private int _horizontalHash;
     private int _verticalHash;
+    private int _isLockedHash;
+    private int _isJumpingHash;
 
 
 
@@ -51,30 +59,41 @@ public class AnotherThirdPersonController : MonoBehaviour
         _animator = GetComponent<Animator>();
         _horizontalHash = Animator.StringToHash("Horizontal");
         _verticalHash = Animator.StringToHash("Vertical");
+        _isLockedHash = Animator.StringToHash("isLocked");
+        _isJumpingHash = Animator.StringToHash("isJumping");
     }
 
 
     private void Update()
     {
-        GetPlayerInput();
+        
         CheckGrounded();
+
+        if (!_isLocked)
+        {
+            GetPlayerInput();
+            HandleMovement();
+            HandleRotation();
+            HandleJump();
+        }
         
-        
-        HandleMovement();
-        HandleRotation();
-        HandleJump();
         HandleGravity();
-        
-        
-        UpdateAnimationValues(0, _moveAmount);
+        UpdateAnimationValues(0, _moveAmount, _isSprinting);
     }
-    
+
+    private void LateUpdate()
+    {
+        _isLocked = _animator.GetBool(_isLockedHash);
+        _isJumping = _animator.GetBool(_isJumpingHash);
+        _animator.SetBool("isGrounded", _isGrounded);
+    }
+
     private void GetPlayerInput()
     {
         _horizontalInput = Input.GetAxisRaw("Horizontal");
         _verticalInput = Input.GetAxisRaw("Vertical");
         _jumpInput = Input.GetButtonDown("Jump");
-        _sprintInput = Input.GetKey(KeyCode.LeftShift);
+        _sprintInput = Input.GetButton("Sprint");
     }
     private void HandleMovement()
     {
@@ -82,22 +101,17 @@ public class AnotherThirdPersonController : MonoBehaviour
         _moveDirection += cameraObject.right * _horizontalInput;
         _moveDirection.Normalize();
         _moveDirection.y = 0;
-        _moveAmount = Mathf.Clamp01(Mathf.Abs(_moveDirection.x) + Mathf.Abs(_moveDirection.y));
+        _moveAmount = Mathf.Clamp01(Mathf.Abs(_horizontalInput) + Mathf.Abs(_verticalInput));
 
-        if (_sprintInput)
+        if (_sprintInput && _moveAmount > 0.5f)
         {
             _targetMoveSpeed = sprintSpeed;
-        }
-        else
-        {
-            if (_moveAmount >= 0.5f)
-            {
-                _targetMoveSpeed = runSpeed;
-            }
-            else
-            {
-                _targetMoveSpeed = walkSpeed;
-            }
+            _isSprinting = true;
+            
+        } else {
+            
+            _targetMoveSpeed = _moveAmount >= 0.5f ? runSpeed : walkSpeed;
+            _isSprinting = false;
         }
 
         
@@ -128,19 +142,27 @@ public class AnotherThirdPersonController : MonoBehaviour
     {
         if (_isGrounded && _jumpInput)
         {
+            _animator.SetBool(_isJumpingHash, true);
+            PlayTargetAnimation("Jump", false);
             _verticalVelocity.y = jumpForce;
         }
     }
 
     private void HandleGravity()
     {
-        if (_isGrounded && _verticalVelocity.y < 0)
+        if (!_isGrounded)
         {
-            _verticalVelocity.y = groundedGravity;
-        }
-        else
-        {
+            if (!_isLocked && !_isJumping)
+            {
+                PlayTargetAnimation("Falling", false);
+            }
+            
+            _inAirTimer += Time.deltaTime;
             _verticalVelocity.y += gravity * Time.deltaTime;
+            
+        } else if (_isGrounded && _verticalVelocity.y < 0) {
+            
+            _verticalVelocity.y = groundedGravity;
         }
 
         _controller.Move(_verticalVelocity * Time.deltaTime);
@@ -148,11 +170,17 @@ public class AnotherThirdPersonController : MonoBehaviour
     
     private void CheckGrounded()
     {
+        if (!_isGrounded && !_isLocked && !_isJumping)
+        {
+            PlayTargetAnimation("Land", true);
+            _inAirTimer = 0;
+        }
+        
         Vector3 spherePosition = transform.position + groundCheckOffset;
         _isGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
     }
 
-    private void UpdateAnimationValues(float horizontal, float vertical)
+    private void UpdateAnimationValues(float horizontal, float vertical, bool sprinting)
     {
         var snappedHorizontal = horizontal switch
         {
@@ -171,9 +199,20 @@ public class AnotherThirdPersonController : MonoBehaviour
             < -0.55f => -1,
             _ => 0
         };
+        
+        if (sprinting)
+        {
+            snappedVertical = 2;
+        }
 
         _animator.SetFloat(_horizontalHash, snappedHorizontal, 0.1f ,Time.deltaTime);
         _animator.SetFloat(_verticalHash, snappedVertical, 0.1f ,Time.deltaTime);
+    }
+
+    private void PlayTargetAnimation(string targetAnimation, bool isLocked)
+    {
+        _animator.SetBool(_isLockedHash, isLocked);
+        _animator.CrossFade(targetAnimation, 0.2f);
     }
 
     
