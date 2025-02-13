@@ -5,30 +5,39 @@ public class AnotherThirdPersonController : MonoBehaviour
 {
     public enum PlayerState
     {
-        Idle,
-        Walking,
-        Running,
-        Sprinting,
-        Jumping,
-        Falling,
-        Landing
+        Idle = 0,
+        Walking = 1,
+        Running = 2,
+        Sprinting = 3,
+        Jumping = 4,
+        Falling = 5,
+        Landing = 6
     }
     
-    public PlayerState currentState = PlayerState.Idle;
+    [SerializeField] private PlayerState currentState = PlayerState.Idle;
+    [SerializeField] private float _currentMoveSpeed;
+    [SerializeField] private float _targetMoveSpeed;
 
     [Header("Movement")]
-    public Transform cameraObject;
-    public float walkSpeed = 4f;
-    public float runSpeed = 8f;
-    public float sprintSpeed = 15f;
-    public float acceleration = 3f;
-    public float rotationSpeed = 15f;
-    public float jumpForce = 8f;
+    [SerializeField] private Transform cameraObject;
+    [SerializeField] private float walkSpeed = 4f;
+    [SerializeField] private float runSpeed = 8f;
+    [SerializeField] private float sprintSpeed = 15f;
+    [SerializeField] private float maxMoveSpeed = 20f;
+    [SerializeField] private float acceleration = 3f;
+    [SerializeField] private float rotationSpeed = 15f;
+    [SerializeField] private float jumpForce = 8f;
+    [SerializeField] private float jumpSpeedBoost = 5f;
+    
+    [Header("Fall & Landing Settings")]
+    [SerializeField] private float fallThreshold = 0.5f;     // Time before fall impact is registered
+    [SerializeField] private float maxFallTime = 2.0f;       // Fall time for maximum impact
+    [SerializeField] private float recoveryDuration = 0.5f;  // Maximum recovery/landing time
+    [SerializeField] private float minMovementControl = 0.2f; // Minimum movement during recovery
     
     [Header("Gravity")]
-    public float gravity = -20f;
-    public float groundedGravity = -2f;
-    public float minFallTime = 0.5f;    // Minimum time in air before considering it a fall
+    [SerializeField] private float gravity = -20f;
+    [SerializeField] private float groundedGravity = -2f;
     
     [Header("Ground Check")]
     [SerializeField] private float groundCheckRadius = 0.23f;
@@ -40,21 +49,21 @@ public class AnotherThirdPersonController : MonoBehaviour
     private bool _isGrounded;
     private Vector3 _moveDirection;
     private Vector3 _verticalVelocity;
-    private float _currentMoveSpeed;
-    private float _targetMoveSpeed;
     private float _moveAmount;
-    private float _inAirTimer;
+    private float _fallTime;
+    private float _recoveryTimer;
+    private float _landingImpact; // 0-1 value representing landing intensity
     
     private float _horizontalInput;
     private float _verticalInput;
     private bool _jumpInput;
     private bool _sprintInput;
+    private bool _walkInput;
     
     private int _horizontalHash;
     private int _verticalHash;
     private int _stateHash;
     private int _fallTimeHash;
-
     
     private PlayerState previousState;
     private float stateTimer;
@@ -86,78 +95,76 @@ public class AnotherThirdPersonController : MonoBehaviour
         _verticalInput = Input.GetAxisRaw("Vertical");
         _jumpInput = Input.GetButtonDown("Jump");
         _sprintInput = Input.GetButton("Sprint");
+        _walkInput = Input.GetButton("Walk");
     }
 
     private void UpdateState()
     {
+        Debug.Log($"State: {currentState}, Grounded: {_isGrounded}, FallTime: {_fallTime}, Vertical Velocity: {_verticalVelocity.y}");
+        
         previousState = currentState;
 
-        // Handle jumping
-        if (_isGrounded && _jumpInput && currentState != PlayerState.Jumping)
+        // Only allow jumping if not in landing recovery
+        if (_isGrounded && _jumpInput && (_recoveryTimer <= 0 || currentState != PlayerState.Landing))
         {
-            if (currentState == PlayerState.Landing)
-            {
-                stateTimer = 0;
-            }
             currentState = PlayerState.Jumping;
             _verticalVelocity.y = jumpForce;
-            stateTimer = 0;
-            _inAirTimer = 0;
+            if (_moveAmount > 0.1f) _currentMoveSpeed += jumpSpeedBoost;
+            ResetTimers();
+            return; // Exit early since we've handled the state change
         }
-        else
+
+        // Handle falling
+        if (!_isGrounded)
         {
-            // Handle falling/landing
-            if (!_isGrounded)
+            // Transition from jumping to falling
+            if (currentState == PlayerState.Jumping && (_verticalVelocity.y < 0 || stateTimer > 0.5f))
             {
-                if (currentState == PlayerState.Jumping)
-                {
-                    if (stateTimer > 0.5f || _verticalVelocity.y < 0)
-                    {
-                        currentState = PlayerState.Falling;
-                    }
-                }
-                else if (currentState != PlayerState.Falling && _inAirTimer >= minFallTime)
-                {
-                    currentState = PlayerState.Falling;
-                }
+                currentState = PlayerState.Falling;
+                _fallTime = 0; // Start counting fall time
             }
-            else if (currentState == PlayerState.Falling)
+            // Transition to falling from any grounded state
+            else if (currentState != PlayerState.Falling && currentState != PlayerState.Jumping)
             {
-                currentState = PlayerState.Landing;
-                stateTimer = 0;
+                currentState = PlayerState.Falling;
             }
-
-            // Handle movement states when grounded
-            if (_isGrounded && currentState != PlayerState.Landing && 
-                currentState != PlayerState.Jumping)
+            
+            // Count fall time while in falling state
+            if (currentState == PlayerState.Falling)
             {
-                if (_moveAmount < 0.1f)
-                {
-                    currentState = PlayerState.Idle;
-                }
-                else if (_sprintInput && _moveAmount > 0.5f)
-                {
-                    currentState = PlayerState.Sprinting;
-                }
-                else if (_moveAmount >= 0.5f)
-                {
-                    currentState = PlayerState.Running;
-                }
-                else
-                {
-                    currentState = PlayerState.Walking;
-                }
+                _fallTime += Time.deltaTime;
             }
-
-            // Handle landing duration based on fall time
-            if (currentState == PlayerState.Landing)
+        }
+        // Handle landing when touching ground while falling
+        else if (currentState == PlayerState.Falling)
+        {
+            currentState = PlayerState.Landing;
+            
+            // Calculate landing impact (0-1)
+            if (_fallTime > fallThreshold)
             {
-                float landingDuration = Mathf.Lerp(0.3f, 0.8f, Mathf.Clamp01(_inAirTimer / 2f));
-                if (stateTimer > landingDuration)
-                {
-                    currentState = PlayerState.Idle;
-                    _inAirTimer = 0;
-                }
+                _landingImpact = Mathf.Clamp01((_fallTime - fallThreshold) / (maxFallTime - fallThreshold));
+                _recoveryTimer = _landingImpact * recoveryDuration;
+            }
+            else
+            {
+                _landingImpact = 0;
+                _recoveryTimer = 0;
+            }
+            
+            stateTimer = 0;
+        }
+        // Update landing state
+        else if (currentState == PlayerState.Landing)
+        {
+            if (_recoveryTimer > 0)
+            {
+                _recoveryTimer -= Time.deltaTime;
+            }
+            else if (stateTimer > _landingImpact * recoveryDuration * 0.5f)
+            {
+                currentState = PlayerState.Idle;
+                ResetTimers();
             }
         }
 
@@ -166,28 +173,75 @@ public class AnotherThirdPersonController : MonoBehaviour
 
     private void HandleMovement()
     {
-        // If landing, don't process movement
-        if (currentState == PlayerState.Landing)
-        {
-            return;
-        }
-        
         _moveDirection = cameraObject.forward * _verticalInput;
         _moveDirection += cameraObject.right * _horizontalInput;
         _moveDirection.Normalize();
         _moveDirection.y = 0;
         _moveAmount = Mathf.Clamp01(Mathf.Abs(_horizontalInput) + Mathf.Abs(_verticalInput));
 
-        _targetMoveSpeed = currentState switch
+        if (_isGrounded && currentState != PlayerState.Jumping)
         {
-            PlayerState.Sprinting => sprintSpeed,
-            PlayerState.Running => runSpeed,
-            PlayerState.Walking => walkSpeed,
-            _ => 0f
-        };
+            if (currentState == PlayerState.Landing)
+            {
+                float recoveryProgress = 1f - (_recoveryTimer / (recoveryDuration * _landingImpact));
+                float movementMultiplier = Mathf.Lerp(minMovementControl, 1f, recoveryProgress);
+                
+                // Calculate base move speed based on input
+                if (_moveAmount > 0)
+                {
+                    if (_walkInput)
+                        _targetMoveSpeed = walkSpeed;
+                    else if (_sprintInput && _moveAmount > 0.5f)
+                        _targetMoveSpeed = sprintSpeed;
+                    else
+                        _targetMoveSpeed = runSpeed;
+                        
+                    _targetMoveSpeed *= movementMultiplier;
+                }
+                else
+                {
+                    _targetMoveSpeed = 0;
+                }
+            }
+            else if (currentState != PlayerState.Landing) // Only handle other states if not landing
+            {
+                if (_moveAmount < 0.1f)
+                {
+                    currentState = PlayerState.Idle;
+                    _targetMoveSpeed = 0f;
+                }
+                else
+                {
+                    if (_walkInput)
+                    {
+                        currentState = PlayerState.Walking;
+                        _targetMoveSpeed = walkSpeed;
+                    }
+                    else if (_sprintInput && _moveAmount > 0.5f)
+                    {
+                        currentState = PlayerState.Sprinting;
+                        _targetMoveSpeed = sprintSpeed;
+                    }
+                    else if (_moveAmount >= 0.5f)
+                    {
+                        currentState = PlayerState.Running;
+                        _targetMoveSpeed = runSpeed;
+                    }
+                    else
+                    {
+                        currentState = PlayerState.Walking;
+                        _targetMoveSpeed = walkSpeed;
+                    }
+                }
+            }
+        }
+        else if (currentState == PlayerState.Jumping || currentState == PlayerState.Falling)
+        {
+            _targetMoveSpeed = _currentMoveSpeed;
+        }
 
         _currentMoveSpeed = Mathf.MoveTowards(_currentMoveSpeed, _targetMoveSpeed, acceleration * Time.deltaTime);
-        
+        _currentMoveSpeed = Mathf.Min(_currentMoveSpeed, maxMoveSpeed);
         _controller.Move(_moveDirection * (_currentMoveSpeed * Time.deltaTime));
     }
 
@@ -203,15 +257,16 @@ public class AnotherThirdPersonController : MonoBehaviour
     {
         if (!_isGrounded)
         {
-            _inAirTimer += Time.deltaTime;
             _verticalVelocity.y += gravity * Time.deltaTime;
         }
         else if (_verticalVelocity.y < 0)
         {
             _verticalVelocity.y = groundedGravity;
-            if (currentState != PlayerState.Jumping && currentState != PlayerState.Landing)
+            
+            // Only reset fall time when in a grounded state (not falling or landing)
+            if (currentState != PlayerState.Falling && currentState != PlayerState.Landing)
             {
-                _inAirTimer = 0;
+                _fallTime = 0;
             }
         }
 
@@ -226,29 +281,44 @@ public class AnotherThirdPersonController : MonoBehaviour
 
     private void UpdateAnimator()
     {
-        // Set the base state
         _animator.SetInteger(_stateHash, (int)currentState);
 
-        // Update fall time parameter for blend trees
-        float normalizedFallTime = Mathf.Clamp01(_inAirTimer / 2f); // Normalize to 0-1 range
-        _animator.SetFloat(_fallTimeHash, normalizedFallTime);
+        // Use landing impact for blend tree during landing
+        float fallBlend = currentState == PlayerState.Landing ? 
+            _landingImpact : 
+            Mathf.Clamp01(_fallTime / maxFallTime);
+            
+        _animator.SetFloat(_fallTimeHash, fallBlend);
 
-        // Update movement values
-        float verticalValue = currentState switch
+        float verticalValue;
+        if (_currentMoveSpeed <= walkSpeed)
         {
-            PlayerState.Sprinting => 2f,
-            PlayerState.Running => 1f,
-            PlayerState.Walking => 0.5f,
-            _ => 0f
-        };
+            verticalValue = (_currentMoveSpeed / walkSpeed) * 0.5f;
+        }
+        else if (_currentMoveSpeed <= runSpeed)
+        {
+            verticalValue = 0.5f + ((_currentMoveSpeed - walkSpeed) / (runSpeed - walkSpeed)) * 0.5f;
+        }
+        else
+        {
+            verticalValue = 1f + ((_currentMoveSpeed - runSpeed) / (sprintSpeed - runSpeed));
+        }
 
         _animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
         _animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
     }
 
+    private void ResetTimers()
+    {
+        _fallTime = 0;
+        _recoveryTimer = 0;
+        _landingImpact = 0;
+        stateTimer = 0;
+    }
+
     private void OnDrawGizmos()
     {
-        Gizmos.color = Color.red;
+        Gizmos.color = _isGrounded ? Color.green : Color.red;
         Vector3 spherePosition = transform.position + groundCheckOffset;
         Gizmos.DrawWireSphere(spherePosition, groundCheckRadius);
     }
