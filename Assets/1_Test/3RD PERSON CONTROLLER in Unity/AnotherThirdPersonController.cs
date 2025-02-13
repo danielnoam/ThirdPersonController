@@ -1,10 +1,7 @@
 using UnityEngine;
-using Unity.Cinemachine;
-using UnityEngine.Serialization;
-
 public class AnotherThirdPersonController : MonoBehaviour
 {
-    public enum PlayerState
+    private enum PlayerState
     {
         Idle = 0,
         Walking = 1,
