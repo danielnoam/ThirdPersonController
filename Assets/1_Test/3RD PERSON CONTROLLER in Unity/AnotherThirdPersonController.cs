@@ -1,24 +1,41 @@
+using System;
 using UnityEngine;
+using UnityEngine.Serialization;
+using VInspector;
+
+
+[Serializable]
+public class MovementType
+{
+    public Transform cameraTransform;
+    public float  walkSpeed = 4f;
+    public float runSpeed = 8f;
+    public float sprintSpeed = 15f;
+    public float maxMoveSpeed = 20f;
+    public float acceleration = 20f;
+    public float rotationSpeed = 6f;
+}
+
+
 public class AnotherThirdPersonController : MonoBehaviour
 {
     private enum PlayerState
     {
-        Idle = 0,
-        Walking = 1,
-        Running = 2,
-        Sprinting = 3,
-        Jumping = 4,
-        Falling = 5,
-        Landing = 6
+        Grounded = 0,
+        Jumping = 1,
+        Falling = 2,
+        Landing = 3
     }
     
-    [SerializeField] private PlayerState currentState = PlayerState.Idle;
-    [SerializeField] private float activeSpeed;
-    [SerializeField] private float desiredSpeed;
-
-    [Header("Movement")]
+    private enum PlayerMovement
+    {
+        CharacterRelative = 0,
+        CameraRelative = 1,
+    }
+    
+    [Foldout("Character Relative Movement")]
     [SerializeField, Tooltip("Reference to the main camera transform for movement direction")] 
-    private Transform cameraObject;
+    private Transform characterRelativeCamera;
     [SerializeField, Tooltip("Base walking speed")] 
     private float walkSpeed = 4f;
     [SerializeField, Tooltip("Running speed - faster than walk")] 
@@ -31,12 +48,18 @@ public class AnotherThirdPersonController : MonoBehaviour
     private float acceleration = 20f;
     [SerializeField, Tooltip("How fast the character rotates to face movement direction")] 
     private float rotationSpeed = 6f;
+    [EndFoldout]
+    
+    
+    [Header("Jumping")]
     [SerializeField, Tooltip("Initial upward force applied when jumping")] 
     private float jumpForce = 8f;
     [SerializeField, Tooltip("Additional forward speed boost when jumping")] 
     private float jumpSpeedBoost = 2f;
+    [SerializeField, Tooltip("How long to buffer jump input before player lands")] 
+    private float jumpBufferTime = 0.2f;
     
-    [Header("Fall & Landing Settings")]
+    [Header("Fall & Landing")]
     [SerializeField, Tooltip("Minimum fall time before impact is registered")] 
     private float fallThreshold = 0.5f;
     [SerializeField, Tooltip("Fall time that results in maximum impact")] 
@@ -44,7 +67,7 @@ public class AnotherThirdPersonController : MonoBehaviour
     [SerializeField, Tooltip("Maximum time to recover from landing")] 
     private float recoveryDuration = 0.5f;
     [SerializeField, Tooltip("Minimum movement control during landing recovery")] 
-    private float minMovementControl = 0.2f;
+    private float minMovementControl = 0.1f;
     
     [Header("Gravity")]
     [SerializeField, Tooltip("Gravity force applied when in air")] 
@@ -56,7 +79,7 @@ public class AnotherThirdPersonController : MonoBehaviour
     [SerializeField, Tooltip("Radius of the ground detection sphere")] 
     private float groundCheckRadius = 0.23f;
     [SerializeField, Tooltip("Offset from player center for ground detection")] 
-    private Vector3 groundCheckOffset = new Vector3(0, 0.2f, 0);
+    private Vector3 groundCheckOffset = new Vector3(0, -0.1f, 0);
     [SerializeField, Tooltip("Layer mask for ground detection")] 
     private LayerMask groundLayer = 1;
     
@@ -66,15 +89,19 @@ public class AnotherThirdPersonController : MonoBehaviour
     private Vector3 _movementVector;
     private Vector3 _gravityForce;
     private float _movementIntensity;
-    private float _fallTime;
+    private float _airTime;      // Time spent in air for fall detection
+    private float _fallTime;     // Time spent specifically in falling state
     private float _landingRecoveryTime;
     private float _landingIntensity;
+    private float _jumpBufferTimer;
+    private bool _hasBufferedJump;
     
     private float _horizontalInput;
     private float _verticalInput;
     private bool _jumpInput;
     private bool _sprintInput;
     private bool _walkInput;
+    private bool _rightClickInput;
     
     private int _horizontalHash;
     private int _verticalHash;
@@ -83,6 +110,13 @@ public class AnotherThirdPersonController : MonoBehaviour
     
     private PlayerState _previousState;
     private float _stateTimer;
+    
+    [Header("Debug")]
+    [SerializeField, ReadOnly] private PlayerState currentState = PlayerState.Grounded;
+    [SerializeField, ReadOnly] private PlayerMovement movementType = PlayerMovement.CharacterRelative;
+    [SerializeField, ReadOnly] private float activeMoveSpeed;
+    [SerializeField, ReadOnly] private float targetMoveSpeed;
+    
 
     private void Awake()
     {
@@ -112,25 +146,52 @@ public class AnotherThirdPersonController : MonoBehaviour
         _jumpInput = Input.GetButtonDown("Jump");
         _sprintInput = Input.GetButton("Sprint");
         _walkInput = Input.GetButton("Walk");
+        _rightClickInput = Input.GetMouseButton(1);
+        
+        
+        // Set jump buffer when jump is pressed
+        if (_jumpInput)
+        {
+            _hasBufferedJump = true;
+            _jumpBufferTimer = jumpBufferTime;
+        }
+        
+        // Update the jump buffer timer
+        if (_hasBufferedJump)
+        {
+            _jumpBufferTimer -= Time.deltaTime;
+            if (_jumpBufferTimer <= 0)
+            {
+                _hasBufferedJump = false;
+            }
+        }
+        
     }
 
     private void UpdateState()
     {
-        Debug.Log($"State: {currentState}, Grounded: {_isGrounded}, FallTime: {_fallTime}, Vertical Velocity: {_gravityForce.y}");
+        Debug.Log($"State: {currentState}, Grounded: {_isGrounded}, AirTime: {_airTime}, FallTime: {_fallTime}, Vertical Velocity: {_gravityForce.y}");
         
         _previousState = currentState;
-        
 
         if (!_isGrounded)
         {
-            if (currentState == PlayerState.Jumping && (_gravityForce.y < 0 || _stateTimer > 0.5f))
+            _airTime += Time.deltaTime;
+            
+            // Enter falling state if:
+            // 1. Was jumping and now descending
+            // 2. Has been in air longer than fall threshold
+            if (currentState == PlayerState.Jumping && _gravityForce.y < 0)
             {
                 currentState = PlayerState.Falling;
                 _fallTime = 0;
             }
-            else if (currentState != PlayerState.Falling && currentState != PlayerState.Jumping)
+            else if (currentState != PlayerState.Falling && 
+                     currentState != PlayerState.Jumping && 
+                     _airTime > fallThreshold)
             {
                 currentState = PlayerState.Falling;
+                _fallTime = 0;
             }
             
             if (currentState == PlayerState.Falling)
@@ -163,7 +224,7 @@ public class AnotherThirdPersonController : MonoBehaviour
             }
             else if (_stateTimer > _landingIntensity * recoveryDuration * 0.5f)
             {
-                currentState = PlayerState.Idle;
+                currentState = PlayerState.Grounded;
                 ResetStateTimers();
             }
         }
@@ -173,19 +234,24 @@ public class AnotherThirdPersonController : MonoBehaviour
 
     private void HandleJump()
     {
-        if (_isGrounded && _jumpInput && (_landingRecoveryTime <= 0 || currentState != PlayerState.Landing))
+        if (_isGrounded && (_landingRecoveryTime <= 0 || currentState != PlayerState.Landing))
         {
-            currentState = PlayerState.Jumping;
-            _gravityForce.y = jumpForce;
-            if (_movementIntensity > 0.1f) activeSpeed += jumpSpeedBoost;
-            ResetStateTimers();
+            // Check for either immediate jump input or buffered jump
+            if (_jumpInput || _hasBufferedJump)
+            {
+                currentState = PlayerState.Jumping;
+                _gravityForce.y = jumpForce;
+                if (_movementIntensity > 0.1f) activeMoveSpeed += jumpSpeedBoost;
+                ResetStateTimers();
+                _hasBufferedJump = false; // Clear the buffer after using it
+            }
         }
     }
 
     private void HandleMovement()
     {
-        _movementVector = cameraObject.forward * _verticalInput;
-        _movementVector += cameraObject.right * _horizontalInput;
+        _movementVector = characterRelativeCamera.forward * _verticalInput;
+        _movementVector += characterRelativeCamera.right * _horizontalInput;
         _movementVector.Normalize();
         _movementVector.y = 0;
         _movementIntensity = Mathf.Clamp01(Mathf.Abs(_horizontalInput) + Mathf.Abs(_verticalInput));
@@ -203,14 +269,13 @@ public class AnotherThirdPersonController : MonoBehaviour
         }
         else if (currentState == PlayerState.Jumping || currentState == PlayerState.Falling)
         {
-            desiredSpeed = activeSpeed;
+            targetMoveSpeed = activeMoveSpeed;
         }
 
-        activeSpeed = Mathf.MoveTowards(activeSpeed, desiredSpeed, acceleration * Time.deltaTime);
-        activeSpeed = Mathf.Min(activeSpeed, maxMoveSpeed);
+        activeMoveSpeed = Mathf.MoveTowards(activeMoveSpeed, targetMoveSpeed, acceleration * Time.deltaTime);
+        activeMoveSpeed = Mathf.Min(activeMoveSpeed, maxMoveSpeed);
         
-        // Apply movement and handle rotation
-        _controller.Move(_movementVector * (activeSpeed * Time.deltaTime));
+        _controller.Move(_movementVector * (activeMoveSpeed * Time.deltaTime));
         if (_movementVector != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(_movementVector);
@@ -226,17 +291,17 @@ public class AnotherThirdPersonController : MonoBehaviour
         if (_movementIntensity > 0)
         {
             if (_walkInput)
-                desiredSpeed = walkSpeed;
+                targetMoveSpeed = walkSpeed;
             else if (_sprintInput && _movementIntensity > 0.5f)
-                desiredSpeed = sprintSpeed;
+                targetMoveSpeed = sprintSpeed;
             else
-                desiredSpeed = runSpeed;
+                targetMoveSpeed = runSpeed;
                 
-            desiredSpeed *= movementMultiplier;
+            targetMoveSpeed *= movementMultiplier;
         }
         else
         {
-            desiredSpeed = 0;
+            targetMoveSpeed = 0;
         }
     }
 
@@ -244,30 +309,21 @@ public class AnotherThirdPersonController : MonoBehaviour
     {
         if (_movementIntensity < 0.1f)
         {
-            currentState = PlayerState.Idle;
-            desiredSpeed = 0f;
+            targetMoveSpeed = 0f;
         }
         else
         {
             if (_walkInput)
             {
-                currentState = PlayerState.Walking;
-                desiredSpeed = walkSpeed;
+                targetMoveSpeed = walkSpeed;
             }
             else if (_sprintInput && _movementIntensity > 0.5f)
             {
-                currentState = PlayerState.Sprinting;
-                desiredSpeed = sprintSpeed;
-            }
-            else if (_movementIntensity >= 0.5f)
-            {
-                currentState = PlayerState.Running;
-                desiredSpeed = runSpeed;
+                targetMoveSpeed = sprintSpeed;
             }
             else
             {
-                currentState = PlayerState.Walking;
-                desiredSpeed = walkSpeed;
+                targetMoveSpeed = runSpeed;
             }
         }
     }
@@ -284,6 +340,7 @@ public class AnotherThirdPersonController : MonoBehaviour
             
             if (currentState != PlayerState.Falling && currentState != PlayerState.Landing)
             {
+                _airTime = 0;
                 _fallTime = 0;
             }
         }
@@ -308,17 +365,17 @@ public class AnotherThirdPersonController : MonoBehaviour
         _animator.SetFloat(_fallTimeHash, fallBlend);
 
         float verticalValue;
-        if (activeSpeed <= walkSpeed)
+        if (activeMoveSpeed <= walkSpeed)
         {
-            verticalValue = (activeSpeed / walkSpeed) * 0.5f;
+            verticalValue = (activeMoveSpeed / walkSpeed) * 0.5f;
         }
-        else if (activeSpeed <= runSpeed)
+        else if (activeMoveSpeed <= runSpeed)
         {
-            verticalValue = 0.5f + ((activeSpeed - walkSpeed) / (runSpeed - walkSpeed)) * 0.5f;
+            verticalValue = 0.5f + ((activeMoveSpeed - walkSpeed) / (runSpeed - walkSpeed)) * 0.5f;
         }
         else
         {
-            verticalValue = 1f + ((activeSpeed - runSpeed) / (sprintSpeed - runSpeed));
+            verticalValue = 1f + ((activeMoveSpeed - runSpeed) / (sprintSpeed - runSpeed));
         }
 
         _animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
@@ -327,10 +384,13 @@ public class AnotherThirdPersonController : MonoBehaviour
 
     private void ResetStateTimers()
     {
+        _airTime = 0;
         _fallTime = 0;
         _landingRecoveryTime = 0;
         _landingIntensity = 0;
         _stateTimer = 0;
+        _jumpBufferTimer = 0;
+        _hasBufferedJump = false;
     }
 
     private void OnDrawGizmos()
