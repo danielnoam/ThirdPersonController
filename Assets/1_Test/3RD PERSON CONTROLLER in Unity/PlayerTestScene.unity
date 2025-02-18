@@ -1601,8 +1601,7 @@ MonoBehaviour:
     sprintSpeedMultiplier: 1.5
     maxMoveSpeed: 20
     acceleration: 20
-    rotationSpeed: 6
-    rotationDamping: 0.2
+    rotationSpeed: 300
     rotationMode: 0
     walkByDefault: 0
   cameraRelativeMovement:
@@ -1613,8 +1612,7 @@ MonoBehaviour:
     sprintSpeedMultiplier: 1
     maxMoveSpeed: 15
     acceleration: 15
-    rotationSpeed: 6
-    rotationDamping: 0.2
+    rotationSpeed: 300
     rotationMode: 1
     walkByDefault: 1
   jumpForce: 8
@@ -1645,7 +1643,6 @@ MonoBehaviour:
     maxMoveSpeed: 20
     acceleration: 20
     rotationSpeed: 6
-    rotationDamping: 0.2
     rotationMode: 0
     walkByDefault: 0
 --- !u!114 &921071778
@@ -1660,7 +1657,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83efbfa0b14c89845958bb52ea3b39d8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mouseSensitivity: 1
+  mouseSensitivity: 25
 --- !u!114 &921071779
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2600,7 +2597,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1605779974
 Transform:
   m_ObjectHideFlags: 0

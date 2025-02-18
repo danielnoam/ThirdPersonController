@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -30,9 +32,6 @@ public class MovementType
     
     [Tooltip("How fast the player rotates")]
     [Min(0f)] public float rotationSpeed = 6f;
-    
-    [Tooltip("Smoothing time for rotation changes")]
-    [Min(0f)] public float rotationDamping = 0.2f;
     
     [Tooltip("How the player's rotation is coupled to the camera")]
     public RotationMode rotationMode = RotationMode.Free;
@@ -240,21 +239,14 @@ public class PlayerController : MonoBehaviour
 
     private void HandleAimCore()
     {
-        // Update look angles based on mouse input
-        _verticalLookAngle -= _playerInput.MouseY;
+        float lookSpeed = 5f; // Adjust this as needed for responsiveness
+
+        _verticalLookAngle = Mathf.Lerp(_verticalLookAngle, _verticalLookAngle - _playerInput.MouseY, Time.deltaTime * lookSpeed);
         _verticalLookAngle = Mathf.Clamp(_verticalLookAngle, verticalLookLimits.x, verticalLookLimits.y);
-        _horizontalLookAngle += _playerInput.MouseX;
+    
+        _horizontalLookAngle = Mathf.Lerp(_horizontalLookAngle, _horizontalLookAngle + _playerInput.MouseX, Time.deltaTime * lookSpeed);
 
-        // Create the desired world rotation
         aimCore.rotation = Quaternion.Euler(_verticalLookAngle, _horizontalLookAngle, 0f);
-
-        // After player rotates, maintain world direction by compensating
-        if (!_playerInput.RightClickInput)  // Only in character-relative mode
-        {
-            var delta = (Quaternion.Inverse(transform.rotation) * aimCore.rotation).eulerAngles;
-            _horizontalLookAngle = NormalizeAngle(delta.y);
-            _verticalLookAngle = NormalizeAngle(delta.x);
-        }
     }
 
     private float NormalizeAngle(float angle)
@@ -267,20 +259,60 @@ public class PlayerController : MonoBehaviour
     private void HandleCameraTransition()
     {
         bool isAiming = _playerInput.RightClickInput;
+
         if (isAiming != _wasAiming)
         {
-            if (isAiming)
-            {
-                characterRelativeMovement.camera.Priority = 0;
-                cameraRelativeMovement.camera.Priority = 10;
-            }
-            else
-            {
-                characterRelativeMovement.camera.Priority = 10;
-                cameraRelativeMovement.camera.Priority = 0;
-            }
+            StopAllCoroutines(); // Stop any ongoing transitions
+            StartCoroutine(SmoothCameraTransition(isAiming));
             _wasAiming = isAiming;
         }
+    }
+
+    private IEnumerator SmoothCameraTransition(bool isAiming)
+    {
+        float transitionDuration = 1f; // Adjust transition speed
+        float elapsedTime = 0f;
+    
+        int startPriorityChar = characterRelativeMovement.camera.Priority;
+        int startPriorityCam = cameraRelativeMovement.camera.Priority;
+    
+        int targetPriorityChar = isAiming ? 0 : 10;
+        int targetPriorityCam = isAiming ? 10 : 0;
+
+        while (elapsedTime < transitionDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            float blend = elapsedTime / transitionDuration;
+
+            // Round to nearest integer to avoid float-to-int conversion errors
+            characterRelativeMovement.camera.Priority = Mathf.RoundToInt(Mathf.Lerp(startPriorityChar, targetPriorityChar, blend));
+            cameraRelativeMovement.camera.Priority = Mathf.RoundToInt(Mathf.Lerp(startPriorityCam, targetPriorityCam, blend));
+
+            yield return null;
+        }
+
+        // Ensure exact values at the end of the transition
+        characterRelativeMovement.camera.Priority = targetPriorityChar;
+        cameraRelativeMovement.camera.Priority = targetPriorityCam;
+    }
+
+    
+    private Quaternion CalculateInputFrame()
+    {
+        // Get the camera's rotation from the current movement type.
+        Quaternion camRotation = currentMovement.camera.transform.rotation;
+        // Compute the camera's up vector.
+        Vector3 camUp = camRotation * Vector3.up;
+        // Get the player's up vector.
+        Vector3 playerUp = transform.up;
+        // Determine the axis to rotate camUp to match playerUp.
+        Vector3 axis = Vector3.Cross(camUp, playerUp);
+        if (axis.sqrMagnitude < 0.001f)
+            return camRotation; // They’re already nearly aligned.
+        // Compute the angle difference.
+        float angle = Vector3.SignedAngle(camUp, playerUp, axis);
+        // Return the adjusted rotation.
+        return Quaternion.AngleAxis(angle, axis) * camRotation;
     }
 
     #endregion Camera and Aim Control ---------------------------------------------------------------------------------
@@ -345,169 +377,135 @@ public class PlayerController : MonoBehaviour
 
     private void HandleMovement()
     {
-        // Update current movement type without changing camera priorities every frame
+        // Choose the movement type based on aiming input.
         currentMovement = _playerInput.RightClickInput ? cameraRelativeMovement : characterRelativeMovement;
 
-        // Calculate movement intensity
+        // Calculate movement intensity (for speed calculations).
         _movementIntensity = Mathf.Clamp01(Mathf.Abs(_playerInput.HorizontalInput) + Mathf.Abs(_playerInput.VerticalInput));
 
-        // Handle movement based on current mode
+        // Build a raw input vector.
+        Vector3 rawInput = new Vector3(_playerInput.HorizontalInput, 0, _playerInput.VerticalInput);
+        rawInput = Vector3.ClampMagnitude(rawInput, 1f);
+
+        // Get the dynamic input frame.
+        Quaternion inputFrame = CalculateInputFrame();
+
+        // Instead of using camera forward/right directly,
+        // compute the movement vector using the input frame.
+        _movementVector = (inputFrame * rawInput).normalized;
+
+        // Handle movement speed based on ground state.
+        if (_isGrounded && currentState != PlayerState.Jumping)
+        {
+            if (currentState == PlayerState.Landing)
+                HandleLandingMovement();
+            else
+                HandleNormalMovement();
+        }
+        else if (currentState == PlayerState.Jumping || currentState == PlayerState.Falling)
+        {
+            targetMoveSpeed = activeMoveSpeed;
+        }
+
+        // Choose rotation handling based on movement mode.
         if (_playerInput.RightClickInput)
         {
-            HandleCameraRelativeMovement();
+            HandleCameraRelativeRotation();
         }
         else
         {
-            HandleCharacterRelativeMovement();
+            HandleCharacterRelativeRotation();
         }
+            
 
-        // Update speed with acceleration
+        // Update active speed with acceleration.
         activeMoveSpeed = Mathf.MoveTowards(activeMoveSpeed, targetMoveSpeed,
             currentMovement.acceleration * Time.deltaTime);
         activeMoveSpeed = Mathf.Min(activeMoveSpeed, currentMovement.maxMoveSpeed);
-    }
 
-    private void HandleCharacterRelativeMovement()
-    {
-        Vector3 cameraForward = currentMovement.camera.transform.forward;
-        Vector3 cameraRight = currentMovement.camera.transform.right;
-
-        cameraForward.y = 0;
-        cameraRight.y = 0;
-        cameraForward.Normalize();
-        cameraRight.Normalize();
-
-        _movementVector = cameraForward * _playerInput.VerticalInput;
-        _movementVector += cameraRight * _playerInput.HorizontalInput;
-        _movementVector.Normalize();
-
-        if (_isGrounded && currentState != PlayerState.Jumping)
-        {
-            if (currentState == PlayerState.Landing)
-            {
-                HandleLandingMovement();
-            }
-            else
-            {
-                HandleNormalMovement();
-            }
-        }
-        else if (currentState == PlayerState.Jumping || currentState == PlayerState.Falling)
-        {
-            targetMoveSpeed = activeMoveSpeed;
-        }
-
-        // Handle rotation based on mode
-        Quaternion targetRotation = transform.rotation;
-
-        // In character-relative mode, we only rotate based on movement
-        if (_movementVector.sqrMagnitude > 0.01f)
-        {
-            targetRotation = Quaternion.LookRotation(_movementVector);
-        }
-
-        // Apply rotation with damping
-        transform.rotation = Quaternion.Slerp(
-            transform.rotation, 
-            targetRotation,
-            Damper.Damp(1, currentMovement.rotationDamping, Time.deltaTime)
-        );  
-
+        // Finally, apply movement.
         _controller.Move(_movementVector * (activeMoveSpeed * Time.deltaTime));
     }
-
-    private void HandleCameraRelativeMovement()
+    
+    private void HandleCharacterRelativeRotation()
     {
-        // Get stable direction vectors from aim core
-        Vector3 aimForward = aimCore.forward;
-        Vector3 aimRight = aimCore.right;
+        if (_movementVector.sqrMagnitude > 0.01f)
+        {
+            Vector3 forwardDirection = _movementVector.normalized;
         
-        // Project to horizontal plane
-        aimForward.y = 0;
-        aimRight.y = 0;
-        aimForward.Normalize();
-        aimRight.Normalize();
-        
-        // Calculate movement vector
-        _movementVector = aimForward * _playerInput.VerticalInput;
-        _movementVector += aimRight * _playerInput.HorizontalInput;
-        _movementVector.Normalize();
-        _movementVector.y = 0;
+            // Calculate desired rotation
+            Quaternion targetRotation = Quaternion.LookRotation(forwardDirection);
 
-        // Handle movement speed
-        if (_isGrounded && currentState != PlayerState.Jumping)
-        {
-            if (currentState == PlayerState.Landing)
-            {
-                HandleLandingMovement();
-            }
-            else
-            {
-                HandleNormalMovement();
-            }
+            // Instead of Slerp, use velocity-based smoothing like Cinemachine
+            float rotationVelocity = currentMovement.rotationSpeed * Time.deltaTime;
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationVelocity);
         }
-        else if (currentState == PlayerState.Jumping || currentState == PlayerState.Falling)
-        {
-            targetMoveSpeed = activeMoveSpeed;
-        }
-
-        // Track hemisphere changes
-        Vector3 up = aimCore.up;
-        Vector3 playerUp = transform.up;
-        bool inTopHemisphere = Vector3.Dot(up, playerUp) >= 0;
-        
-        if (inTopHemisphere != _inTopHemisphere)
-        {
-            _inTopHemisphere = inTopHemisphere;
-            _timeInHemisphere = 0;  // Reset transition time when crossing hemispheres
-        }
-        _timeInHemisphere += Time.deltaTime;
-
-        // Get camera forward direction and handle hemisphere compensation
-        Vector3 cameraForward = aimForward;  // Use the already flattened aimForward
-        if (!_inTopHemisphere)
-        {
-            // Smoothly transition rotation when in bottom hemisphere
-            const float transitionDuration = 0.2f;
-            float blend = Mathf.Clamp01(_timeInHemisphere / transitionDuration);
-            cameraForward = Vector3.Slerp(-cameraForward, cameraForward, blend);
-        }
-        cameraForward.y = 0;
+    }
+    
+    private void HandleCameraRelativeRotation()
+    {
+        // Get the camera's horizontal forward direction
+        Vector3 cameraForward = currentMovement.camera.transform.forward;
+        cameraForward.y = 0; // Keep rotation level
         cameraForward.Normalize();
 
-        // Handle rotation based on mode
         Quaternion targetRotation = transform.rotation;
 
         switch (currentMovement.rotationMode)
         {
             case RotationMode.Coupled:
-                // Always face camera direction
                 targetRotation = Quaternion.LookRotation(cameraForward);
                 break;
-
             case RotationMode.CoupledMoving:
-                // Face camera only when moving
                 if (_movementVector.sqrMagnitude > 0.01f)
-                {
                     targetRotation = Quaternion.LookRotation(cameraForward);
-                }
                 break;
-
             case RotationMode.Free:
-                // Rotate based on movement direction
                 if (_movementVector.sqrMagnitude > 0.01f)
-                {
                     targetRotation = Quaternion.LookRotation(_movementVector);
-                }
                 break;
         }
 
-        // Apply rotation with damping
-        transform.rotation = Quaternion.Slerp(
-            transform.rotation, 
-            targetRotation,
-            Damper.Damp(1, currentMovement.rotationDamping, Time.deltaTime)
-        );
+        // Apply Cinemachine-like smooth rotation velocity
+        float rotationVelocity = currentMovement.rotationSpeed * Time.deltaTime;
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationVelocity);
+    }
+
+    private void HandleCharacterRelativeMovement()
+    {
+        // Movement vector is already computed in HandleMovement()
+    
+        if (_isGrounded && currentState != PlayerState.Jumping)
+        {
+            if (currentState == PlayerState.Landing)
+                HandleLandingMovement();
+            else
+                HandleNormalMovement();
+        }
+        else if (currentState == PlayerState.Jumping || currentState == PlayerState.Falling)
+        {
+            targetMoveSpeed = activeMoveSpeed;
+        }
+
+        // Apply movement
+        _controller.Move(_movementVector * (activeMoveSpeed * Time.deltaTime));
+    }
+
+    private void HandleCameraRelativeMovement()
+    {
+        // Movement vector is already computed in HandleMovement()
+    
+        if (_isGrounded && currentState != PlayerState.Jumping)
+        {
+            if (currentState == PlayerState.Landing)
+                HandleLandingMovement();
+            else
+                HandleNormalMovement();
+        }
+        else if (currentState == PlayerState.Jumping || currentState == PlayerState.Falling)
+        {
+            targetMoveSpeed = activeMoveSpeed;
+        }
 
         // Apply movement
         _controller.Move(_movementVector * (activeMoveSpeed * Time.deltaTime));
