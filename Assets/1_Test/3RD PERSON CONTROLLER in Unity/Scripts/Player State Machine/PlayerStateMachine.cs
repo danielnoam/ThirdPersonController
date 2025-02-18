@@ -1,6 +1,7 @@
 
 using UnityEngine;
 using Unity.Cinemachine;
+using UnityEngine.Serialization;
 
 
 public enum PlayerAnimationState
@@ -9,7 +10,6 @@ public enum PlayerAnimationState
     Jump = 1,
     Fall = 2,
     Landing = 3,
-    Crouch = 4
 }
 
 
@@ -22,29 +22,32 @@ public class PlayerStateMachine : MonoBehaviour
     public PlayerJumpingState JumpingState { get; private set; }
     public PlayerFallingState FallingState { get; private set; }
     public PlayerLandingState LandingState { get; private set; }
-    public PlayerCrouchingState CrouchingState { get; private set; }
 
     [Header("Movement")]
     public float walkSpeed = 4f;
     public float runSpeed = 8f;
     public float sprintSpeedMultiplier = 1.5f;
-    public float crouchSpeed = 2f;
     public float acceleration = 10f;
     public float rotationSpeed = 6f;
-    
-    [Header("Jump")]
     public float jumpForce = 8f;
+    
+    [Header("Air Movement")]
+    public float airDrag = 2.0f;  // How quickly horizontal speed decreases when no input
+    public float airControl = 0.5f;
+    public float airRotation = 0.5f;
+    
+    [Header("Gravity")]
     public float gravity = -20f;
     public float groundedGravity = -2f;
-
-    [Header("Fall & Landing")]
-    [SerializeField, Tooltip("Minimum fall time before impact is registered")]
+    
+    [Header("Land")]
+    [Tooltip("Minimum fall time before impact is registered")]
     public float fallThreshold = 0.5f;
-    [SerializeField, Tooltip("Fall time that results in maximum impact")]
+    [Tooltip("Fall time that results in maximum impact")]
     public float maxFallTime = 2.0f;
-    [SerializeField, Tooltip("Maximum time to recover from landing")]
+    [Tooltip("Maximum time to recover from landing")]
     public float recoveryDuration = 0.5f;
-    [SerializeField, Tooltip("Minimum movement control during landing recovery")]
+    [Tooltip("Minimum movement control during landing recovery")]
     public float minMovementControl = 0.1f;
     
     [Header("Ground Check")]
@@ -54,9 +57,16 @@ public class PlayerStateMachine : MonoBehaviour
     
     [Header("Camera")]
     public CinemachineCamera freeLookCamera;
-    public CinemachineCamera aimCamera;
-    public Transform aimCore;
 
+    
+    [Header("Debug Info")]
+    [SerializeField] private float _airTime;
+    [SerializeField] private float _fallTime;
+    [SerializeField] private float _landingIntensity;
+    [SerializeField] private bool _isGrounded;
+    [SerializeField] private float _activeMoveSpeed;
+    
+    
     // Common components
     public CharacterController Controller { get; private set; }
     public Animator Animator { get; private set; }
@@ -66,24 +76,44 @@ public class PlayerStateMachine : MonoBehaviour
     public bool JumpPressed { get; private set; }
     public bool SprintPressed { get; private set; }
     public bool WalkPressed { get; private set; }
-    public bool CrouchPressed { get; private set; }
-    public bool IsAiming { get; private set; }
     public Vector2 MouseDelta { get; private set; }
 
     // State tracking
-    private bool _isGrounded;
-    public bool IsGrounded => _isGrounded;
-    public float AirTime { get; set; }
-    public float FallTime { get; set; }
-    public float LandingIntensity { get; set; }
-    public float activeMoveSpeed { get; private set; }
+    public float AirTime 
+    { 
+        get => _airTime;
+        set => _airTime = value;
+    }
+
+    public float FallTime
+    {
+        get => _fallTime;
+        set => _fallTime = value;
+    }
+
+    public float LandingIntensity
+    {
+        get => _landingIntensity;
+        set => _landingIntensity = value;
+    }
+
+    public bool IsGrounded
+    {
+        get => _isGrounded;
+        private set => _isGrounded = value;
+    }
+
+    public float activeMoveSpeed
+    {
+        get => _activeMoveSpeed;
+        private set => _activeMoveSpeed = value;
+    }
     
-    // Animation parameter hashes for efficiency
+    // Animation hashes
     private readonly int _stateHash = Animator.StringToHash("StateIndex");
     private readonly int _verticalHash = Animator.StringToHash("Vertical");
     private readonly int _horizontalHash = Animator.StringToHash("Horizontal");
     private readonly int _fallTimeHash = Animator.StringToHash("FallTime");
-    private readonly int _cameraRelativeHash = Animator.StringToHash("CameraRelative");
 
 
     
@@ -98,14 +128,11 @@ public class PlayerStateMachine : MonoBehaviour
         JumpingState = new PlayerJumpingState(this);
         FallingState = new PlayerFallingState(this);
         LandingState = new PlayerLandingState(this);
-        CrouchingState = new PlayerCrouchingState(this);
-
-        if (aimCore == null) Debug.LogError("AimCore not found as child of player!");
-        if (freeLookCamera == null || aimCamera == null) Debug.LogError("Cinemachine cameras not assigned!");
+        
+        if (freeLookCamera == null) Debug.LogError("Cinemachine cameras not assigned!");
 
         // Set camera priorities
         freeLookCamera.Priority = 15; // Default movement camera
-        aimCamera.Priority = 0; // Aim camera inactive by default
 
         // Set initial state
         SwitchState(GroundedState);
@@ -127,7 +154,7 @@ public class PlayerStateMachine : MonoBehaviour
     private void CheckGrounded()
     {
         Vector3 spherePosition = transform.position + groundCheckOffset;
-        _isGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
+        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
     }
 
     public void SwitchState(PlayerBaseState newState)
@@ -150,20 +177,16 @@ public class PlayerStateMachine : MonoBehaviour
         JumpPressed = Input.GetButtonDown("Jump");
         SprintPressed = Input.GetButton("Sprint");
         WalkPressed = Input.GetButton("Walk");
-        CrouchPressed = Input.GetButton("Crouch");
         
         MouseDelta = new Vector2(
             Input.GetAxis("Mouse X"),
             Input.GetAxis("Mouse Y")
         );
         
-        IsAiming = Input.GetMouseButton(1);
     }
     
     private void SyncAnimations()
     {
-        // Update camera relative state
-        Animator.SetBool(_cameraRelativeHash, IsAiming);
     
         // Set current state
         PlayerAnimationState currentAnimState = CurrentState switch
@@ -172,7 +195,6 @@ public class PlayerStateMachine : MonoBehaviour
             PlayerJumpingState => PlayerAnimationState.Jump,
             PlayerFallingState => PlayerAnimationState.Fall,
             PlayerLandingState => PlayerAnimationState.Landing,
-            PlayerCrouchingState => PlayerAnimationState.Crouch,
             _ => PlayerAnimationState.Grounded
         };
         Animator.SetInteger(_stateHash, (int)currentAnimState);
@@ -188,22 +210,9 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void UpdateMovementAnimation()
     {
-        if (IsAiming)
-        {
-            // Camera relative movement
-            float verticalValue = CalculateVerticalBlend(MovementInput.y);
-            float horizontalValue = CalculateHorizontalBlend(MovementInput.x, MouseDelta.x);
-        
-            Animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
-            Animator.SetFloat(_horizontalHash, horizontalValue, 0.1f, Time.deltaTime);
-        }
-        else
-        {
-            // Character relative movement
-            float verticalValue = CalculateSpeedBlend();
-            Animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
-            Animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
-        }
+        float verticalValue = CalculateSpeedBlend();
+        Animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
+        Animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
     }
     
     private float CalculateSpeedBlend()
@@ -222,46 +231,84 @@ public class PlayerStateMachine : MonoBehaviour
             return 1f + sprintProgress;
         }
     }
-
-    private float CalculateVerticalBlend(float inputValue)
+    
+    
+    public void SetMoveSpeed(float speed)
     {
-        if (inputValue == 0) return 0;
+        activeMoveSpeed = speed;
+    }
 
-        if (activeMoveSpeed <= walkSpeed)
+    public float CalculateTargetSpeed(float movementIntensity, float speedMultiplier = 1f)
+    {
+        if (movementIntensity < 0.1f)
+            return 0f;
+        
+        if (WalkPressed)
+            return walkSpeed * speedMultiplier;
+        else if (SprintPressed && movementIntensity > 0.5f)
+            return runSpeed * sprintSpeedMultiplier * speedMultiplier;
+        else
+            return runSpeed * speedMultiplier;
+    }
+
+    public void UpdateMoveSpeed(float targetSpeed)
+    {
+        activeMoveSpeed = Mathf.MoveTowards(
+            activeMoveSpeed, 
+            targetSpeed, 
+            acceleration * Time.deltaTime
+        );
+    }
+    
+    public void MoveCharacter(Vector3 moveDirection, float speedMultiplier = 1f, Vector3? verticalOverride = null)
+    {
+        // Calculate horizontal movement
+        Vector3 movement = moveDirection * (activeMoveSpeed * speedMultiplier);
+    
+        // Apply vertical movement (gravity or jump)
+        if (verticalOverride.HasValue)
         {
-            return 0.5f * (inputValue * activeMoveSpeed / walkSpeed);
-        }
-        else if (activeMoveSpeed <= runSpeed)
-        {
-            return inputValue * (0.5f + 0.5f * (activeMoveSpeed - walkSpeed) / (runSpeed - walkSpeed));
+            movement.y = verticalOverride.Value.y;
         }
         else
         {
-            float sprintProgress = (activeMoveSpeed - runSpeed) / (runSpeed * (sprintSpeedMultiplier - 1));
-            return inputValue * (1f + sprintProgress);
+            movement.y = groundedGravity;
         }
+
+        // Apply movement
+        Controller.Move(movement * Time.fixedDeltaTime);
     }
 
-    private float CalculateHorizontalBlend(float horizontalInput, float mouseX)
+    public Vector3 CalculateMoveDirection()
     {
-        if (horizontalInput == 0 && mouseX == 0) return 0;
+        var forward = freeLookCamera.transform.forward;
+        var right = freeLookCamera.transform.right;
+    
+        forward.y = 0;
+        right.y = 0;
+        forward.Normalize();
+        right.Normalize();
 
-        float strafeInfluence = horizontalInput;
-        if (mouseX != 0 && MovementInput.sqrMagnitude > 0.01f)
+        // Calculate movement direction relative to camera
+        return (forward * MovementInput.y + right * MovementInput.x).normalized;
+    }
+
+    public void RotateTowardsMoveDirection(Vector3 moveDirection, float rotationMultiplier = 1f)
+    {
+        if (moveDirection.sqrMagnitude > 0.01f)
         {
-            strafeInfluence += Mathf.Sign(mouseX) * 0.5f;
+            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                targetRotation,
+                rotationSpeed * rotationMultiplier * Time.deltaTime * 100f
+            );
         }
-    
-        strafeInfluence = Mathf.Clamp(strafeInfluence, -1f, 1f);
-    
-        return activeMoveSpeed <= walkSpeed ? 
-            0.5f * strafeInfluence : 
-            strafeInfluence;
     }
 
     private void OnDrawGizmos()
     {
-        Gizmos.color = _isGrounded ? Color.green : Color.red;
+        Gizmos.color = IsGrounded ? Color.green : Color.red;
         Vector3 spherePosition = transform.position + groundCheckOffset;
         Gizmos.DrawWireSphere(spherePosition, groundCheckRadius);
     }

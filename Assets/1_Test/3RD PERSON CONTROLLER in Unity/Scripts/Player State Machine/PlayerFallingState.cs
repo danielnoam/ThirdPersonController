@@ -1,21 +1,23 @@
-
 using UnityEngine;
 
 public class PlayerFallingState : PlayerBaseState
 {
-    private Vector3 momentum;
-    private float activeMoveSpeed;
-    private Vector3 moveDirection;
-    private bool wasAiming;
-    private const float AIR_CONTROL = 0.3f;
+    private Vector3 _momentum;
+    private Vector3 _moveDirection;
 
     public PlayerFallingState(PlayerStateMachine stateMachine) : base(stateMachine) { }
 
     public override void EnterState()
     {
         // Keep current momentum
-        momentum = stateMachine.Controller.velocity;
+        _momentum = stateMachine.Controller.velocity;
         stateMachine.FallTime = 0;
+    }
+    
+    public override void ExitState()
+    {
+        // Reset vertical momentum
+        _momentum.y = 0;
     }
 
     public override void UpdateState()
@@ -24,12 +26,69 @@ public class PlayerFallingState : PlayerBaseState
         stateMachine.AirTime += Time.deltaTime;
         stateMachine.FallTime += Time.deltaTime;
 
-        // Apply gravity
-        momentum.y += stateMachine.gravity * Time.deltaTime;
+        // Update vertical and horizontal movement
+        UpdateVerticalMovement();
+        UpdateHorizontalMovement();
 
-        HandleCameraTransition();
-        HandleAirControl();
+        // Check state transitions
+        CheckStateTransitions();
+    }
+    
+    public override void FixedUpdateState()
+    {
+        // Apply movement with air control
+        stateMachine.MoveCharacter(_moveDirection, stateMachine.airControl, _momentum);
+    }
 
+    private void UpdateVerticalMovement()
+    {
+        // Apply gravity to vertical momentum
+        _momentum.y += stateMachine.gravity * Time.deltaTime;
+    }
+
+    private void UpdateHorizontalMovement()
+    {
+        // Get input-based movement direction relative to camera
+        Vector3 inputDirection = stateMachine.CalculateMoveDirection();
+    
+        // Current horizontal velocity
+        Vector3 horizontalVelocity = new Vector3(_momentum.x, 0, _momentum.z);
+    
+        if (inputDirection.magnitude > 0.1f)
+        {
+            // Calculate target velocity based on input
+            float targetSpeed = stateMachine.CalculateTargetSpeed(inputDirection.magnitude);
+            Vector3 targetVelocity = inputDirection * targetSpeed;
+
+            // Blend between current and target velocity using airControl
+            horizontalVelocity = Vector3.Lerp(
+                horizontalVelocity,
+                targetVelocity,
+                stateMachine.airControl * Time.deltaTime
+            );
+        
+            // Update move direction and handle rotation
+            _moveDirection = inputDirection; // Use input direction for rotation
+            stateMachine.RotateTowardsMoveDirection(_moveDirection, stateMachine.airRotation);
+        }
+        else
+        {
+            // When no input, maintain current direction but apply air drag
+            _moveDirection = horizontalVelocity.normalized;
+            horizontalVelocity = Vector3.Lerp(
+                horizontalVelocity,
+                Vector3.zero,
+                stateMachine.airDrag * Time.deltaTime
+            );
+        }
+    
+        // Update momentum
+        _momentum.x = horizontalVelocity.x;
+        _momentum.z = horizontalVelocity.z;
+    }
+
+    private void CheckStateTransitions()
+    {
         // Check for landing
         if (stateMachine.IsGrounded)
         {
@@ -42,71 +101,5 @@ public class PlayerFallingState : PlayerBaseState
                 stateMachine.SwitchState(stateMachine.GroundedState);
             }
         }
-    }
-
-    public override void FixedUpdateState()
-    {
-        stateMachine.Controller.Move(momentum * Time.fixedDeltaTime);
-    }
-
-    private void HandleCameraTransition()
-    {
-        bool isAiming = stateMachine.IsAiming;
-
-        if (isAiming != wasAiming)
-        {
-            stateMachine.aimCamera.Priority = isAiming ? 15 : 0;
-            stateMachine.freeLookCamera.Priority = isAiming ? 10 : 15;
-            wasAiming = isAiming;
-        }
-    }
-
-    private void HandleAirControl()
-    {
-        // Calculate move direction relative to camera
-        var cameraTransform = stateMachine.IsAiming ? 
-            stateMachine.aimCamera.transform : 
-            stateMachine.freeLookCamera.transform;
-
-        var forward = cameraTransform.forward;
-        var right = cameraTransform.right;
-
-        forward.y = 0;
-        right.y = 0;
-        forward.Normalize();
-        right.Normalize();
-
-        // Calculate desired movement direction
-        moveDirection = (forward * stateMachine.MovementInput.y + 
-                        right * stateMachine.MovementInput.x).normalized;
-
-        // Apply limited air control
-        Vector3 horizontalVelocity = new Vector3(momentum.x, 0, momentum.z);
-        horizontalVelocity = Vector3.MoveTowards(
-            horizontalVelocity,
-            moveDirection * stateMachine.runSpeed,
-            stateMachine.acceleration * AIR_CONTROL * Time.deltaTime
-        );
-
-        // Update momentum
-        momentum.x = horizontalVelocity.x;
-        momentum.z = horizontalVelocity.z;
-
-        // Rotate player if there's movement input
-        if (moveDirection.sqrMagnitude > 0.01f)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-            stateMachine.transform.rotation = Quaternion.RotateTowards(
-                stateMachine.transform.rotation,
-                targetRotation,
-                stateMachine.rotationSpeed * Time.deltaTime * 50f // Reduced rotation speed in air
-            );
-        }
-    }
-
-    public override void ExitState()
-    {
-        // Preserve momentum for next state
-        momentum.y = 0; // Reset vertical momentum
     }
 }
