@@ -4,7 +4,7 @@ using CinemachineCamera = Unity.Cinemachine.CinemachineCamera;
 
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(Animator))]
-public class ThirdPersonController : MonoBehaviour
+public class ThirdPersonControllerTest2 : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float walkSpeed = 4f;
