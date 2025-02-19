@@ -1,18 +1,21 @@
-
 using UnityEngine;
 
 public class PlayerGroundedState : PlayerBaseState
 {
     private Vector3 _moveDirection;
-    private float _targetMoveSpeed;
-    private Vector3 _gravityForce;
-    private float _movementIntensity;
+    private Vector2 _lastMovementInput;
+    private bool _shouldUpdateDirection;
+    private float _currentSpeed;
 
-    public PlayerGroundedState(PlayerStateMachine stateMachine) : base(stateMachine) { }
-
+    public PlayerGroundedState(PlayerStateMachine stateMachine) : base(stateMachine) 
+    {
+        _shouldUpdateDirection = true;
+    }
+    
     public override void EnterState()
     {
-        _gravityForce = Vector3.zero;
+        _shouldUpdateDirection = true;
+        _currentSpeed = 0f;
     }
     
     public override void ExitState()
@@ -23,53 +26,70 @@ public class PlayerGroundedState : PlayerBaseState
     public override void UpdateState()
     {
         // Check for state transitions
-        if (!stateMachine.IsGrounded)
+        if (!StateMachine.IsGrounded && StateMachine.FallTime > StateMachine.fallThreshold)
         {
-            stateMachine.SwitchState(stateMachine.FallingState);
+            StateMachine.SwitchState(StateMachine.FallingState);
             return;
         }
 
-        if (stateMachine.JumpPressed)
+        if (StateMachine.JumpPressed)
         {
-            stateMachine.SwitchState(stateMachine.JumpingState);
+            StateMachine.SwitchState(StateMachine.JumpingState);
             return;
         }
+
+        // Check if movement input has changed
+        if (_lastMovementInput != StateMachine.MovementInput)
+        {
+            _lastMovementInput = StateMachine.MovementInput;
+            _shouldUpdateDirection = true;
+        }
         
-        
+        HandleRotation();
         HandleMovement();
-        ApplyGravity();
     }
 
     public override void FixedUpdateState()
     {
-        stateMachine.MoveCharacter(_moveDirection);
+        Vector3 finalMovement = _moveDirection * _currentSpeed;
+        StateMachine.MoveCharacter(finalMovement);
     }
     
+    private void HandleRotation()
+    {
+        if (_moveDirection.sqrMagnitude > PlayerStateMachine.MinMovementThreshold)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(_moveDirection);
+            StateMachine.RotateCharacter(targetRotation);
+        }
+    }
 
     private void HandleMovement()
     {
+        // Only recalculate direction if input has changed
+        if (_shouldUpdateDirection)
+        {
+            _moveDirection = StateMachine.CalculateMoveDirection();
+            _shouldUpdateDirection = false;
+        }
+        
+        // Calculate movement intensity (0-1)
         float movementIntensity = Mathf.Clamp01(
-            Mathf.Abs(stateMachine.MovementInput.x) + 
-            Mathf.Abs(stateMachine.MovementInput.y)
+            Mathf.Abs(StateMachine.MovementInput.x) + 
+            Mathf.Abs(StateMachine.MovementInput.y)
         );
 
-        float targetSpeed = stateMachine.CalculateTargetSpeed(movementIntensity);
-        stateMachine.UpdateMoveSpeed(targetSpeed);
-
-        _moveDirection = stateMachine.CalculateMoveDirection();
-        stateMachine.RotateTowardsMoveDirection(_moveDirection);
+        // Get target speed
+        float targetSpeed = StateMachine.CalculateTargetSpeed(movementIntensity);
+        
+        // Update current speed with acceleration
+        _currentSpeed = Mathf.MoveTowards(
+            _currentSpeed, 
+            targetSpeed, 
+            StateMachine.acceleration * Time.deltaTime
+        );
+        
+        // Update state machine's speed for animations etc
+        StateMachine.SetMoveSpeed(_currentSpeed);
     }
-
-    private void ApplyGravity()
-    {
-        if (!stateMachine.IsGrounded)
-        {
-            _gravityForce.y += stateMachine.gravity * Time.deltaTime;
-        }
-        else if (_gravityForce.y < 0)
-        {
-            _gravityForce.y = stateMachine.groundedGravity;
-        }
-    }
-    
 }

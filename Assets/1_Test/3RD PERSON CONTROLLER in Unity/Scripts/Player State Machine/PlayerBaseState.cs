@@ -1,16 +1,15 @@
 
 public abstract class PlayerBaseState
 {
-    protected PlayerStateMachine stateMachine;
+    protected PlayerStateMachine StateMachine;
 
     public PlayerBaseState(PlayerStateMachine stateMachine)
     {
-        this.stateMachine = stateMachine;
+        this.StateMachine = stateMachine;
     }
 
     public abstract void EnterState();
     public abstract void ExitState();
     public abstract void UpdateState();
     public abstract void FixedUpdateState();
-    public virtual void OnAnimatorMoveState() { }
 }

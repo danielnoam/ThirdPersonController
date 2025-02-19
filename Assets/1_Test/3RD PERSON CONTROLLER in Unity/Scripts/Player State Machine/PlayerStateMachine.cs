@@ -26,15 +26,16 @@ public class PlayerStateMachine : MonoBehaviour
     [Header("Movement")]
     public float walkSpeed = 4f;
     public float runSpeed = 8f;
-    public float sprintSpeedMultiplier = 1.5f;
+    public float sprintSpeed = 12f;
     public float acceleration = 10f;
     public float rotationSpeed = 6f;
     public float jumpForce = 8f;
     
     [Header("Air Movement")]
-    public float airDrag = 2.0f;  // How quickly horizontal speed decreases when no input
-    public float airControl = 0.5f;
-    public float airRotation = 0.5f;
+    public float airMoveSpeed = 3f;
+    public float airRotationSpeed = 3f;
+    public float airAcceleration = 5f;
+    public float airFriction = 2.0f;
     
     [Header("Gravity")]
     public float gravity = -20f;
@@ -56,58 +57,33 @@ public class PlayerStateMachine : MonoBehaviour
     [SerializeField] private LayerMask groundLayer = 1;
     
     [Header("Camera")]
-    public CinemachineCamera freeLookCamera;
-
+    [SerializeField] private CinemachineCamera freeLookCamera;
     
-    [Header("Debug Info")]
-    [SerializeField] private float _airTime;
-    [SerializeField] private float _fallTime;
-    [SerializeField] private float _landingIntensity;
-    [SerializeField] private bool _isGrounded;
-    [SerializeField] private float _activeMoveSpeed;
     
     
     // Common components
-    public CharacterController Controller { get; private set; }
-    public Animator Animator { get; private set; }
+    private CharacterController _controller;
+    private Animator _animator;
+    
 
+    // State tracking
+    public float AirTime { get; private set; }
+
+    public float FallTime { get; private set; }
+
+    public float LandingIntensity { get; private set; }
+
+    public bool IsGrounded { get; private set; }
+
+    public float activeMoveSpeed { get; private set; }
+    
+    
     // Input properties
     public Vector2 MovementInput { get; private set; }
     public bool JumpPressed { get; private set; }
     public bool SprintPressed { get; private set; }
     public bool WalkPressed { get; private set; }
     public Vector2 MouseDelta { get; private set; }
-
-    // State tracking
-    public float AirTime 
-    { 
-        get => _airTime;
-        set => _airTime = value;
-    }
-
-    public float FallTime
-    {
-        get => _fallTime;
-        set => _fallTime = value;
-    }
-
-    public float LandingIntensity
-    {
-        get => _landingIntensity;
-        set => _landingIntensity = value;
-    }
-
-    public bool IsGrounded
-    {
-        get => _isGrounded;
-        private set => _isGrounded = value;
-    }
-
-    public float activeMoveSpeed
-    {
-        get => _activeMoveSpeed;
-        private set => _activeMoveSpeed = value;
-    }
     
     // Animation hashes
     private readonly int _stateHash = Animator.StringToHash("StateIndex");
@@ -116,12 +92,16 @@ public class PlayerStateMachine : MonoBehaviour
     private readonly int _fallTimeHash = Animator.StringToHash("FallTime");
 
 
-    
+    // Constants
+    public const float MinMovementThreshold = 0.01f;
+    public const float SprintIntensityThreshold = 0.5f;
+    public const float MinMovementIntensity = 0.1f;
+
 
     private void Awake()
     {
-        Controller = GetComponent<CharacterController>();
-        Animator = GetComponent<Animator>();
+        _controller = GetComponent<CharacterController>();
+        _animator = GetComponent<Animator>();
 
         // Initialize states
         GroundedState = new PlayerGroundedState(this);
@@ -150,12 +130,12 @@ public class PlayerStateMachine : MonoBehaviour
     {
         CurrentState.FixedUpdateState();
     }
+    
 
-    private void CheckGrounded()
-    {
-        Vector3 spherePosition = transform.position + groundCheckOffset;
-        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
-    }
+
+
+
+    #region State Control ---------------------------------------------------------------
 
     public void SwitchState(PlayerBaseState newState)
     {
@@ -166,6 +146,136 @@ public class PlayerStateMachine : MonoBehaviour
         // Debug state changes
         Debug.Log($"Switched to {newState.GetType().Name}");
     }
+
+    #endregion State Control ---------------------------------------------------------------
+
+    
+    
+    #region Movement ---------------------------------------------------------------
+    
+    private void CheckGrounded()
+    {
+        Vector3 spherePosition = transform.position + groundCheckOffset;
+        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
+    }
+
+    public void MoveCharacter(Vector3 movement)
+    {
+        _controller.Move(movement * Time.fixedDeltaTime);
+    }
+
+    public void RotateCharacter(Quaternion targetRotation, float rotationSpeedMultiplier = 1f)
+    {
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation,
+            targetRotation,
+            rotationSpeed * rotationSpeedMultiplier * Time.deltaTime * 100f
+        );
+    }
+    
+    public void SetMoveSpeed(float speed)
+    {
+        activeMoveSpeed = speed;
+    }
+    
+    public void SetAirTime(float time)
+    {
+        AirTime = time;
+    }
+    
+    public void SetFallTime(float time)
+    {
+        FallTime = time;
+    }
+    
+
+    public float CalculateTargetSpeed(float movementIntensity)
+    {
+        if (movementIntensity < MinMovementIntensity)
+            return 0f;
+        if (WalkPressed)
+            return walkSpeed;
+        else if (SprintPressed && movementIntensity > SprintIntensityThreshold)
+            return sprintSpeed;
+        else
+            return runSpeed;
+    }
+    
+    
+    public Vector3 CalculateMoveDirection()
+    {
+        // Get camera forward and right
+        var forward = freeLookCamera.transform.forward;
+        var right = freeLookCamera.transform.right;
+    
+        // Project onto horizontal plane
+        forward.y = 0;
+        right.y = 0;
+        forward.Normalize();
+        right.Normalize();
+
+        // Calculate movement direction relative to camera
+        return (forward * MovementInput.y + 
+                right * MovementInput.x).normalized;
+    }
+    
+    
+    #endregion Movement ---------------------------------------------------------------
+
+    
+    #region Animations ---------------------------------------------------------------
+
+    private void SyncAnimations()
+    {
+    
+        // Set current state
+        PlayerAnimationState currentAnimState = CurrentState switch
+        {
+            PlayerGroundedState => PlayerAnimationState.Grounded,
+            PlayerJumpingState => PlayerAnimationState.Jump,
+            PlayerFallingState => PlayerAnimationState.Fall,
+            PlayerLandingState => PlayerAnimationState.Landing,
+            _ => PlayerAnimationState.Grounded
+        };
+        _animator.SetInteger(_stateHash, (int)currentAnimState);
+
+        // Handle fall/landing blend
+        float fallBlend = CurrentState is PlayerLandingState ? 
+            LandingIntensity : 
+            Mathf.Clamp01(FallTime / maxFallTime);
+        _animator.SetFloat(_fallTimeHash, fallBlend);
+
+        UpdateMovementAnimation();
+    }
+
+    private void UpdateMovementAnimation()
+    {
+        float verticalValue = CalculateSpeedBlend();
+        _animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
+        _animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
+    }
+    
+    private float CalculateSpeedBlend()
+    {
+        if (activeMoveSpeed <= walkSpeed)
+        {
+            return (activeMoveSpeed / walkSpeed) * 0.5f;
+        }
+        else if (activeMoveSpeed <= runSpeed)
+        {
+            return 0.5f + ((activeMoveSpeed - walkSpeed) / (runSpeed - walkSpeed)) * 0.5f;
+        }
+        else
+        {
+            float sprintProgress = (activeMoveSpeed - runSpeed) / (runSpeed * (sprintSpeed - 1));
+            return 1f + sprintProgress;
+        }
+    }
+
+    #endregion Animations ---------------------------------------------------------------
+
+    
+    #region Input ---------------------------------------------------------------
 
     private void GetInput()
     {
@@ -184,127 +294,11 @@ public class PlayerStateMachine : MonoBehaviour
         );
         
     }
-    
-    private void SyncAnimations()
-    {
-    
-        // Set current state
-        PlayerAnimationState currentAnimState = CurrentState switch
-        {
-            PlayerGroundedState => PlayerAnimationState.Grounded,
-            PlayerJumpingState => PlayerAnimationState.Jump,
-            PlayerFallingState => PlayerAnimationState.Fall,
-            PlayerLandingState => PlayerAnimationState.Landing,
-            _ => PlayerAnimationState.Grounded
-        };
-        Animator.SetInteger(_stateHash, (int)currentAnimState);
 
-        // Handle fall/landing blend
-        float fallBlend = CurrentState is PlayerLandingState ? 
-            LandingIntensity : 
-            Mathf.Clamp01(FallTime / maxFallTime);
-        Animator.SetFloat(_fallTimeHash, fallBlend);
-
-        UpdateMovementAnimation();
-    }
-
-    private void UpdateMovementAnimation()
-    {
-        float verticalValue = CalculateSpeedBlend();
-        Animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
-        Animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
-    }
-    
-    private float CalculateSpeedBlend()
-    {
-        if (activeMoveSpeed <= walkSpeed)
-        {
-            return (activeMoveSpeed / walkSpeed) * 0.5f;
-        }
-        else if (activeMoveSpeed <= runSpeed)
-        {
-            return 0.5f + ((activeMoveSpeed - walkSpeed) / (runSpeed - walkSpeed)) * 0.5f;
-        }
-        else
-        {
-            float sprintProgress = (activeMoveSpeed - runSpeed) / (runSpeed * (sprintSpeedMultiplier - 1));
-            return 1f + sprintProgress;
-        }
-    }
+    #endregion Input ---------------------------------------------------------------
     
     
-    public void SetMoveSpeed(float speed)
-    {
-        activeMoveSpeed = speed;
-    }
-
-    public float CalculateTargetSpeed(float movementIntensity, float speedMultiplier = 1f)
-    {
-        if (movementIntensity < 0.1f)
-            return 0f;
-        
-        if (WalkPressed)
-            return walkSpeed * speedMultiplier;
-        else if (SprintPressed && movementIntensity > 0.5f)
-            return runSpeed * sprintSpeedMultiplier * speedMultiplier;
-        else
-            return runSpeed * speedMultiplier;
-    }
-
-    public void UpdateMoveSpeed(float targetSpeed)
-    {
-        activeMoveSpeed = Mathf.MoveTowards(
-            activeMoveSpeed, 
-            targetSpeed, 
-            acceleration * Time.deltaTime
-        );
-    }
-    
-    public void MoveCharacter(Vector3 moveDirection, float speedMultiplier = 1f, Vector3? verticalOverride = null)
-    {
-        // Calculate horizontal movement
-        Vector3 movement = moveDirection * (activeMoveSpeed * speedMultiplier);
-    
-        // Apply vertical movement (gravity or jump)
-        if (verticalOverride.HasValue)
-        {
-            movement.y = verticalOverride.Value.y;
-        }
-        else
-        {
-            movement.y = groundedGravity;
-        }
-
-        // Apply movement
-        Controller.Move(movement * Time.fixedDeltaTime);
-    }
-
-    public Vector3 CalculateMoveDirection()
-    {
-        var forward = freeLookCamera.transform.forward;
-        var right = freeLookCamera.transform.right;
-    
-        forward.y = 0;
-        right.y = 0;
-        forward.Normalize();
-        right.Normalize();
-
-        // Calculate movement direction relative to camera
-        return (forward * MovementInput.y + right * MovementInput.x).normalized;
-    }
-
-    public void RotateTowardsMoveDirection(Vector3 moveDirection, float rotationMultiplier = 1f)
-    {
-        if (moveDirection.sqrMagnitude > 0.01f)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                targetRotation,
-                rotationSpeed * rotationMultiplier * Time.deltaTime * 100f
-            );
-        }
-    }
+    #region Utility ---------------------------------------------------------------
 
     private void OnDrawGizmos()
     {
@@ -312,4 +306,8 @@ public class PlayerStateMachine : MonoBehaviour
         Vector3 spherePosition = transform.position + groundCheckOffset;
         Gizmos.DrawWireSphere(spherePosition, groundCheckRadius);
     }
+
+    #endregion Utility ---------------------------------------------------------------
+    
+    
 }
