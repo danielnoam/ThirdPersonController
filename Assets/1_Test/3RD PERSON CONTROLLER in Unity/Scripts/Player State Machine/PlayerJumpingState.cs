@@ -25,33 +25,43 @@ public class PlayerJumpingState : PlayerBaseState
         StateMachine.SetAirTime(StateMachine.AirTime + Time.deltaTime);
         
         HandleMovement();
+        HandleGravity();
         CheckStateTransitions();
     }
 
     public override void FixedUpdateState()
     {
-        // Apply gravity to vertical velocity
-        _verticalVelocity += StateMachine.gravity * Time.deltaTime;
-        
         Vector3 movement = _moveDirection * _currentSpeed;
         movement.y = _verticalVelocity;
         StateMachine.MoveCharacter(movement);
+    }
+
+    private void HandleGravity()
+    {
+        // Apply gravity to vertical velocity
+        _verticalVelocity += StateMachine.gravity * Time.deltaTime;
+        
+        // Limit to terminal velocity
+        if (_verticalVelocity < StateMachine.maxVerticalVelocity)
+        {
+            _verticalVelocity = StateMachine.maxVerticalVelocity;
+        }
     }
 
     private void HandleMovement()
     {
         Vector3 inputDirection = StateMachine.CalculateMoveDirection();
         
-        if (inputDirection.magnitude > PlayerStateMachine.MinMovementIntensity)
+        if (inputDirection.magnitude > PlayerStateMachine.MovementInputThreshold)
         {
-            // Set move direction and handle rotation
             _moveDirection = inputDirection;
-            
-            // Rotate towards movement direction with air rotation speed
-            if (_moveDirection.sqrMagnitude > PlayerStateMachine.MinMovementThreshold)
+        
+            // Update rotation if moving
+            if (_moveDirection.sqrMagnitude > PlayerStateMachine.RotationInputThreshold)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(_moveDirection);
-                StateMachine.RotateCharacter(targetRotation, StateMachine.airRotationSpeed);
+                // Use air rotation speed multiplier based on movement
+                StateMachine.RotateCharacter(targetRotation, StateMachine.airRotationSpeed, _currentSpeed > 0.1f ? 1.5f : 1f);
             }
 
             // If current speed is higher than air move speed, decelerate to it
@@ -77,7 +87,6 @@ public class PlayerJumpingState : PlayerBaseState
             );
         }
         
-        // Update state machine's speed for animations
         StateMachine.SetMoveSpeed(_currentSpeed);
     }
 
@@ -90,10 +99,10 @@ public class PlayerJumpingState : PlayerBaseState
             return;
         }
         
-        // If somehow grounded during jump, switch to grounded state
-        if (StateMachine.IsGrounded)
-        {
-            StateMachine.SwitchState(StateMachine.GroundedState);
-        }
+        // // If somehow grounded during jump, switch to grounded state
+        // if (StateMachine.IsGrounded)
+        // {
+        //     StateMachine.SwitchState(StateMachine.GroundedState);
+        // }
     }
 }

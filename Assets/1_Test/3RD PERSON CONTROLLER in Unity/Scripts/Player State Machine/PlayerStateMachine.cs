@@ -1,4 +1,5 @@
 
+using TMPro;
 using UnityEngine;
 using Unity.Cinemachine;
 using UnityEngine.Serialization;
@@ -24,49 +25,65 @@ public class PlayerStateMachine : MonoBehaviour
     public PlayerLandingState LandingState { get; private set; }
 
     [Header("Movement")]
+    [Tooltip("Walking speed when holding the walk button")]
     public float walkSpeed = 4f;
+    [Tooltip("Default running speed")]
     public float runSpeed = 8f;
+    [Tooltip("Maximum speed when sprinting with sufficient input")]
     public float sprintSpeed = 12f;
+    [Tooltip("How quickly the character reaches target speed")]
     public float acceleration = 10f;
-    public float rotationSpeed = 6f;
+    [Tooltip("Base rotation speed when turning on the ground")]
+    public float rotationSpeed = 3f;
+    [Tooltip("Initial upward velocity applied when jumping")]
     public float jumpForce = 8f;
-    
+
     [Header("Air Movement")]
-    public float airMoveSpeed = 3f;
-    public float airRotationSpeed = 3f;
-    public float airAcceleration = 5f;
+    [Tooltip("Maximum horizontal speed while in the air")]
+    public float airMoveSpeed = 4f;
+    [Tooltip("Base rotation speed when turning in the air")]
+    public float airRotationSpeed = 2f;
+    [Tooltip("How quickly the character reaches target speed in air")]
+    public float airAcceleration = 3f;
+    [Tooltip("How quickly the character loses momentum in air")]
     public float airFriction = 2.0f;
-    
+
     [Header("Gravity")]
-    public float gravity = -20f;
-    public float groundedGravity = -2f;
-    
+    [Tooltip("Downward acceleration applied while in the air")]
+    public float gravity = -15f;
+    [Tooltip("Small downward force applied while grounded to stick to slopes")]
+    public float groundedGravity = -5f;
+    [Tooltip("Maximum downward velocity the character can reach")]
+    public float maxVerticalVelocity = -50f;
+
     [Header("Land")]
-    [Tooltip("Minimum fall time before impact is registered")]
-    public float fallThreshold = 0.5f;
-    [Tooltip("Fall time that results in maximum impact")]
+    [Tooltip("Minimum time falling before impact animations trigger")]
+    public float fallThreshold = 0.1f;
+    [Tooltip("Fall time that results in maximum impact effect")]
     public float maxFallTime = 2.0f;
-    [Tooltip("Maximum time to recover from landing")]
-    public float recoveryDuration = 0.5f;
-    [Tooltip("Minimum movement control during landing recovery")]
+    [Tooltip("Time needed to recover from maximum impact landing")]
+    public float recoveryDuration = 1f;
+    [Tooltip("Percentage of movement control retained during landing recovery")]
     public float minMovementControl = 0.1f;
-    
+
     [Header("Ground Check")]
+    [Tooltip("Radius of the sphere used to detect ground")]
     [SerializeField] private float groundCheckRadius = 0.23f;
+    [Tooltip("Offset from character position for ground detection")]
     [SerializeField] private Vector3 groundCheckOffset = new Vector3(0, -0.1f, 0);
+    [Tooltip("Layer mask defining what objects count as ground")]
     [SerializeField] private LayerMask groundLayer = 1;
+
     
     [Header("Camera")]
     [SerializeField] private CinemachineCamera freeLookCamera;
     
-    
-    
-    // Common components
-    private CharacterController _controller;
-    private Animator _animator;
+    [Header("Debug")]
+    [SerializeField] private TextMeshProUGUI debugText;
     
 
-    // State tracking
+    private CharacterController _controller;
+    private Animator _animator;
     public float AirTime { get; private set; }
 
     public float FallTime { get; private set; }
@@ -93,9 +110,9 @@ public class PlayerStateMachine : MonoBehaviour
 
 
     // Constants
-    public const float MinMovementThreshold = 0.01f;
-    public const float SprintIntensityThreshold = 0.5f;
-    public const float MinMovementIntensity = 0.1f;
+    public const float RotationInputThreshold = 0.01f;
+    public const float SprintInputThreshold = 0.5f;
+    public const float MovementInputThreshold = 0.1f;
 
 
     private void Awake()
@@ -112,7 +129,7 @@ public class PlayerStateMachine : MonoBehaviour
         if (freeLookCamera == null) Debug.LogError("Cinemachine cameras not assigned!");
 
         // Set camera priorities
-        freeLookCamera.Priority = 15; // Default movement camera
+        freeLookCamera.Priority = 15;
 
         // Set initial state
         SwitchState(GroundedState);
@@ -120,10 +137,12 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void Update()
     {
-        CheckGrounded();
         GetInput();
+        CheckGrounded();
+        UpdateFallTime();
         CurrentState.UpdateState();
         SyncAnimations();
+        UpdateDebugText();
     }
 
     private void FixedUpdate()
@@ -148,8 +167,6 @@ public class PlayerStateMachine : MonoBehaviour
     }
 
     #endregion State Control ---------------------------------------------------------------
-
-    
     
     #region Movement ---------------------------------------------------------------
     
@@ -158,18 +175,34 @@ public class PlayerStateMachine : MonoBehaviour
         Vector3 spherePosition = transform.position + groundCheckOffset;
         IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
     }
+    
+    private void UpdateFallTime()
+    {
+        // Reset fall time when grounded
+        if (IsGrounded && FallTime > 0)
+        {
+            SetFallTime(0);
+            return;
+        }
+
+        // Only increment fall time when moving downward
+        if (!IsGrounded)
+        {
+            SetFallTime(FallTime + Time.deltaTime);
+        }
+    }
 
     public void MoveCharacter(Vector3 movement)
     {
         _controller.Move(movement * Time.fixedDeltaTime);
     }
 
-    public void RotateCharacter(Quaternion targetRotation, float rotationSpeedMultiplier = 1f)
+    public void RotateCharacter(Quaternion targetRotation, float baseSpeed, float multiplier = 1f)
     {
         transform.rotation = Quaternion.RotateTowards(
             transform.rotation,
             targetRotation,
-            rotationSpeed * rotationSpeedMultiplier * Time.deltaTime * 100f
+            baseSpeed * multiplier * Time.deltaTime * 100f
         );
     }
     
@@ -188,14 +221,18 @@ public class PlayerStateMachine : MonoBehaviour
         FallTime = time;
     }
     
+    public void SetLandingIntensity(float intensity)
+    {
+        LandingIntensity = intensity;
+    }
 
     public float CalculateTargetSpeed(float movementIntensity)
     {
-        if (movementIntensity < MinMovementIntensity)
+        if (movementIntensity < MovementInputThreshold)
             return 0f;
         if (WalkPressed)
             return walkSpeed;
-        else if (SprintPressed && movementIntensity > SprintIntensityThreshold)
+        else if (SprintPressed && movementIntensity > SprintInputThreshold)
             return sprintSpeed;
         else
             return runSpeed;
@@ -240,9 +277,7 @@ public class PlayerStateMachine : MonoBehaviour
         _animator.SetInteger(_stateHash, (int)currentAnimState);
 
         // Handle fall/landing blend
-        float fallBlend = CurrentState is PlayerLandingState ? 
-            LandingIntensity : 
-            Mathf.Clamp01(FallTime / maxFallTime);
+        float fallBlend = CurrentState is PlayerLandingState ? LandingIntensity : Mathf.Clamp01(FallTime / maxFallTime);
         _animator.SetFloat(_fallTimeHash, fallBlend);
 
         UpdateMovementAnimation();
@@ -261,15 +296,18 @@ public class PlayerStateMachine : MonoBehaviour
         {
             return (activeMoveSpeed / walkSpeed) * 0.5f;
         }
-        else if (activeMoveSpeed <= runSpeed)
+        
+        if (activeMoveSpeed <= runSpeed)
         {
             return 0.5f + ((activeMoveSpeed - walkSpeed) / (runSpeed - walkSpeed)) * 0.5f;
         }
-        else
+        
+        if (activeMoveSpeed <= sprintSpeed) 
         {
-            float sprintProgress = (activeMoveSpeed - runSpeed) / (runSpeed * (sprintSpeed - 1));
-            return 1f + sprintProgress;
+            return 1f + (activeMoveSpeed - runSpeed) / (sprintSpeed - runSpeed);
         }
+
+        return 0f;
     }
 
     #endregion Animations ---------------------------------------------------------------
@@ -300,9 +338,35 @@ public class PlayerStateMachine : MonoBehaviour
     
     #region Utility ---------------------------------------------------------------
 
+    private void UpdateDebugText()
+    {
+        if (!debugText) return;
+
+        debugText.text = $"State: {CurrentState.GetType().Name}\n" +
+                         $"IsGrounded: {IsGrounded}\n" +
+                         $"AirTime: {AirTime}\n" +
+                         $"FallTime: {FallTime}\n" +
+                         $"LandingIntensity: {LandingIntensity}\n" +
+                         $"ActiveMoveSpeed: {activeMoveSpeed}\n"
+                         ;
+
+    }
     private void OnDrawGizmos()
     {
-        Gizmos.color = IsGrounded ? Color.green : Color.red;
+        if (IsGrounded)
+        {
+            Gizmos.color = Color.green;
+        } 
+        else if (FallTime < fallThreshold)
+        {
+            Gizmos.color = Color.yellow;
+        }
+        else
+        {
+            Gizmos.color = Color.red;
+        }
+
+        
         Vector3 spherePosition = transform.position + groundCheckOffset;
         Gizmos.DrawWireSphere(spherePosition, groundCheckRadius);
     }

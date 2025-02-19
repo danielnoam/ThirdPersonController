@@ -1,107 +1,113 @@
-
 using UnityEngine;
 
 public class PlayerLandingState : PlayerBaseState
 {
-    private float _landingRecoveryTime;
     private Vector3 _moveDirection;
-    private Vector3 _gravityForce;
-    private bool _wasAiming;
-    private float _stateTimer;
-    private float _movementMultiplier;
+    private float _currentSpeed;
+    private float _recoveryProgress;
+    private float _landingIntensity;
 
     public PlayerLandingState(PlayerStateMachine stateMachine) : base(stateMachine) { }
 
     public override void EnterState()
     {
         // Calculate landing intensity based on fall time
-        StateMachine.LandingIntensity = Mathf.Clamp01(
+        _landingIntensity = Mathf.Clamp01(
             (StateMachine.FallTime - StateMachine.fallThreshold) / 
             (StateMachine.maxFallTime - StateMachine.fallThreshold)
         );
-
-        // Set recovery time based on landing intensity
-        _landingRecoveryTime = StateMachine.LandingIntensity * StateMachine.recoveryDuration;
-        _stateTimer = 0;
-
-        // Reset movement values
-        _moveDirection = Vector3.zero;
-        _gravityForce = Vector3.up * StateMachine.groundedGravity;
+        
+        // Start with minimal movement control
+        _currentSpeed = 0f;
+        _recoveryProgress = 0f;
+        
+        // Set state machine's landing intensity for animations
+        StateMachine.SetLandingIntensity(_landingIntensity);
     }
     
     public override void ExitState()
     {
-        // Reset state values
-        StateMachine.SetMoveSpeed(0);
         _moveDirection = Vector3.zero;
-        StateMachine.LandingIntensity = 0;
-        StateMachine.FallTime = 0;
-        StateMachine.AirTime = 0;
+        StateMachine.SetLandingIntensity(0);
+        StateMachine.SetFallTime(0);
+        StateMachine.SetAirTime(0);
     }
 
     public override void UpdateState()
     {
-        if (!StateMachine.IsGrounded)
+        
+        // Update recovery progress
+        _recoveryProgress = Mathf.Min(1f, _recoveryProgress + (Time.deltaTime / (StateMachine.recoveryDuration * _landingIntensity)));
+        
+        HandleMovement();
+        CheckStateTransitions();
+    }
+
+    public override void FixedUpdateState()
+    {
+        Vector3 movement = _moveDirection * _currentSpeed;
+        movement.y = StateMachine.groundedGravity;
+        StateMachine.MoveCharacter(movement);
+    }
+
+    private void HandleMovement()
+    {
+        Vector3 inputDirection = StateMachine.CalculateMoveDirection();
+        
+        if (inputDirection.magnitude > PlayerStateMachine.MovementInputThreshold)
         {
-            StateMachine.SwitchState(StateMachine.FallingState);
-            return;
+            _moveDirection = inputDirection;
+        
+            // Calculate movement control based on landing intensity and recovery progress
+            float movementControl = Mathf.Lerp(
+                StateMachine.minMovementControl,
+                1f,
+                _recoveryProgress
+            );
+        
+            // Update rotation if moving
+            if (_moveDirection.sqrMagnitude > PlayerStateMachine.RotationInputThreshold)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(_moveDirection);
+                // Use movement control as multiplier to limit rotation during recovery
+                StateMachine.RotateCharacter(targetRotation, StateMachine.rotationSpeed, movementControl * (_currentSpeed > 0.1f ? 1.5f : 1f));
+            }
+
+            // Calculate target speed with movement restriction
+            float targetSpeed = StateMachine.CalculateTargetSpeed(inputDirection.magnitude) * movementControl;
+            
+            _currentSpeed = Mathf.MoveTowards(
+                _currentSpeed,
+                targetSpeed,
+                StateMachine.acceleration * movementControl * Time.deltaTime
+            );
         }
+        else
+        {
+            // No input - decelerate to 0
+            _currentSpeed = Mathf.MoveTowards(
+                _currentSpeed,
+                0f,
+                StateMachine.acceleration * Time.deltaTime
+            );
+        }
+        
+        StateMachine.SetMoveSpeed(_currentSpeed);
+    }
+
+    private void CheckStateTransitions()
+    {
+        // Transition to grounded state when recovered
+        if (_recoveryProgress >= 1f)
+        {
+            StateMachine.SwitchState(StateMachine.GroundedState);
+        }
+        
         
         if (StateMachine.JumpPressed)
         {
             StateMachine.SwitchState(StateMachine.JumpingState);
             return;
-        }
-
-        // Update timers
-        _stateTimer += Time.deltaTime;
-        if (_landingRecoveryTime > 0)
-        {
-            _landingRecoveryTime -= Time.deltaTime;
-        }
-        else if (_stateTimer > StateMachine.LandingIntensity * StateMachine.recoveryDuration * 0.5f)
-        {
-            StateMachine.SwitchState(StateMachine.GroundedState);
-            return;
-        }
-        
-        HandleMovement();
-        ApplyGravity();
-    }
-
-    public override void FixedUpdateState()
-    {
-        StateMachine.MoveCharacter(_moveDirection, _movementMultiplier);
-    }
-    
-
-    private void HandleMovement()
-    {
-        float recoveryProgress = 1f - (_landingRecoveryTime / (StateMachine.recoveryDuration * StateMachine.LandingIntensity));
-        _movementMultiplier = Mathf.Lerp(StateMachine.minMovementControl, 1f, recoveryProgress);
-
-        float movementIntensity = Mathf.Clamp01(
-            Mathf.Abs(StateMachine.MovementInput.x) + 
-            Mathf.Abs(StateMachine.MovementInput.y)
-        );
-
-        float targetSpeed = StateMachine.CalculateTargetSpeed(movementIntensity);
-        StateMachine.UpdateMoveSpeed(targetSpeed);
-
-        _moveDirection = StateMachine.CalculateMoveDirection();
-        StateMachine.RotateTowardsMoveDirection(_moveDirection, _movementMultiplier);
-    }
-    
-    
-    private void ApplyGravity()
-    {
-        if (!StateMachine.IsGrounded)
-        {
-            _gravityForce.y += StateMachine.gravity * Time.deltaTime;
-        }
-        else
-        {
-            _gravityForce.y = StateMachine.groundedGravity;
         }
     }
 }
