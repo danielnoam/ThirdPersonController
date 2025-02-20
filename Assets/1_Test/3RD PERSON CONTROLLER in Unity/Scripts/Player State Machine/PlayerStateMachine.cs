@@ -75,15 +75,14 @@ public class PlayerStateMachine : MonoBehaviour
     [SerializeField] private LayerMask groundLayer = 1;
 
     
-    [Header("Camera")]
+    [Header("References")]
     [SerializeField] private CinemachineCamera freeLookCamera;
-    
-    [Header("Debug")]
+    [SerializeField] private CharacterController controller;
+    [SerializeField] private Animator animator;
     [SerializeField] private TextMeshProUGUI debugText;
     
 
-    private CharacterController _controller;
-    private Animator _animator;
+
     public float AirTime { get; private set; }
 
     public float FallTime { get; private set; }
@@ -117,8 +116,8 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void Awake()
     {
-        _controller = GetComponent<CharacterController>();
-        _animator = GetComponent<Animator>();
+        if (!controller) controller = GetComponent<CharacterController>();
+        if (!animator) animator = GetComponent<Animator>();
 
         // Initialize states
         GroundedState = new PlayerGroundedState(this);
@@ -168,6 +167,7 @@ public class PlayerStateMachine : MonoBehaviour
 
     #endregion State Control ---------------------------------------------------------------
     
+    
     #region Movement ---------------------------------------------------------------
     
     private void CheckGrounded()
@@ -186,7 +186,7 @@ public class PlayerStateMachine : MonoBehaviour
         }
 
         // Only increment fall time when moving downward
-        if (!IsGrounded)
+        if (!IsGrounded && CurrentState is PlayerFallingState)
         {
             SetFallTime(FallTime + Time.deltaTime);
         }
@@ -194,7 +194,7 @@ public class PlayerStateMachine : MonoBehaviour
 
     public void MoveCharacter(Vector3 movement)
     {
-        _controller.Move(movement * Time.fixedDeltaTime);
+        controller.Move(movement * Time.fixedDeltaTime);
     }
 
     public void RotateCharacter(Quaternion targetRotation, float baseSpeed, float multiplier = 1f)
@@ -274,11 +274,11 @@ public class PlayerStateMachine : MonoBehaviour
             PlayerLandingState => PlayerAnimationState.Landing,
             _ => PlayerAnimationState.Grounded
         };
-        _animator.SetInteger(_stateHash, (int)currentAnimState);
+        animator.SetInteger(_stateHash, (int)currentAnimState);
 
         // Handle fall/landing blend
         float fallBlend = CurrentState is PlayerLandingState ? LandingIntensity : Mathf.Clamp01(FallTime / maxFallTime);
-        _animator.SetFloat(_fallTimeHash, fallBlend);
+        animator.SetFloat(_fallTimeHash, fallBlend);
 
         UpdateMovementAnimation();
     }
@@ -286,8 +286,8 @@ public class PlayerStateMachine : MonoBehaviour
     private void UpdateMovementAnimation()
     {
         float verticalValue = CalculateSpeedBlend();
-        _animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
-        _animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
+        animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
+        animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
     }
     
     private float CalculateSpeedBlend()

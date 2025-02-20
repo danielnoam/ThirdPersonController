@@ -12,7 +12,6 @@ public class PlayerFallingState : PlayerBaseState
     {
         StateMachine.SetFallTime(0);
         _currentSpeed = StateMachine.activeMoveSpeed;
-        // Start with current vertical velocity to maintain smooth transitions
         _verticalVelocity = 0f;
     }
     

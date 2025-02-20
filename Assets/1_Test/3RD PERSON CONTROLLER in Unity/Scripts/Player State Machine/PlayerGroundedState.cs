@@ -13,7 +13,7 @@ public class PlayerGroundedState : PlayerBaseState
     
     public override void EnterState()
     {
-        _currentSpeed = 0f;
+        
     }
     
     public override void ExitState()

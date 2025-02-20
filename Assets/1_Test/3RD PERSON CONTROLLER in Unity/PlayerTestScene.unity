@@ -1608,6 +1608,7 @@ GameObject:
   - component: {fileID: 921071773}
   - component: {fileID: 921071775}
   - component: {fileID: 921071776}
+  - component: {fileID: 921071778}
   - component: {fileID: 921071777}
   m_Layer: 6
   m_Name: Player
@@ -1716,7 +1717,26 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   freeLookCamera: {fileID: 79849544}
+  controller: {fileID: 921071776}
+  animator: {fileID: 921071775}
   debugText: {fileID: 1768376068}
+--- !u!114 &921071778
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 921071772}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 909d917d73a63f940ac158d02e936645, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pushLayers:
+    serializedVersion: 2
+    m_Bits: 1
+  canPush: 1
+  strength: 1.1
 --- !u!1 &955131022
 GameObject:
   m_ObjectHideFlags: 0
@@ -2637,6 +2657,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1605779974}
+  - component: {fileID: 1605779976}
+  - component: {fileID: 1605779977}
   - component: {fileID: 1605779975}
   m_Layer: 0
   m_Name: Robot
@@ -2644,7 +2666,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1605779974
 Transform:
   m_ObjectHideFlags: 0
@@ -2676,20 +2698,74 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90bc06b4d52a75b4cac228f61b5f99bb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  target: {fileID: 846155233}
   moveSpeed: 5
-  smoothness: 0.3
-  lookAtDirection: 1
-  rotationSmoothness: 5
+  rotationSpeed: 5
   maxPitchAngle: 45
-  hoverAmplitude: 0.5
+  friction: 1
+  hoverAmplitude: 0.3
   hoverFrequency: 1
+  baseHeight: 1.5
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 1
   leftEar: {fileID: 1430565558}
   rightEar: {fileID: 1756275909}
   maxEarAngle: 45
   earRotationSmoothness: 0.2
   minSpeedForEarRotation: 0.1
   maxSpeedForEarRotation: 4
+  rigidBody: {fileID: 1605779976}
+  currentState: 1
+  battery: 100
+  target: {fileID: 0}
+--- !u!54 &1605779976
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1605779973}
+  serializedVersion: 4
+  m_Mass: 3
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 0
+  m_Interpolate: 2
+  m_Constraints: 0
+  m_CollisionDetection: 1
+--- !u!135 &1605779977
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1605779973}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.5
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1669001712
 GameObject:
   m_ObjectHideFlags: 0
