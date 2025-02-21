@@ -186,7 +186,7 @@ public class PlayerStateMachine : MonoBehaviour
         }
 
         // Only increment fall time when moving downward
-        if (!IsGrounded && CurrentState is PlayerFallingState)
+        if (!IsGrounded && CurrentState != JumpingState)
         {
             SetFallTime(FallTime + Time.deltaTime);
         }
