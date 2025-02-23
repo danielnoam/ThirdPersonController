@@ -1367,6 +1367,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8718778828885884488, guid: e5f4daf24146ee040b5a2d7a73b30aa0, type: 3}
   m_PrefabInstance: {fileID: 767360957}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &778313320
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 778313321}
+  m_Layer: 6
+  m_Name: RobotTarget (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 2488908585195742037, guid: 0000000000000000d000000000000000, type: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &778313321
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 778313320}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 921071773}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &781981794
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1718,6 +1749,7 @@ Transform:
   m_Children:
   - {fileID: 1701234116}
   - {fileID: 1100798662}
+  - {fileID: 778313321}
   - {fileID: 846155233}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -2785,10 +2817,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90bc06b4d52a75b4cac228f61b5f99bb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 15
-  minFollowDistance: 0.5
-  maxFollowDistance: 5
-  followSmoothness: 0.2
+  moveSpeed: 25
+  minFollowDistance: 2
+  maxFollowDistance: 4
+  followSmoothness: 0.02
   followCurve:
     serializedVersion: 2
     m_Curve:
@@ -2802,28 +2834,10 @@ MonoBehaviour:
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
-      time: 0.25728568
-      value: -0.043221414
-      inSlope: 1.4538779
-      outSlope: 1.4538779
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    - serializedVersion: 3
-      time: 0.41346973
-      value: 1.0259473
-      inSlope: 0.5254382
-      outSlope: 0.5254382
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.1576587
-    - serializedVersion: 3
       time: 1
-      value: 1.0005951
-      inSlope: 0
-      outSlope: 0
+      value: 1
+      inSlope: 2
+      outSlope: 2
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
@@ -2832,7 +2846,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   friction: 1
-  rotationStability: 2
+  rotationStability: 4
   maxAngularVelocity: 3
   rotationCurve:
     serializedVersion: 2
@@ -2840,39 +2854,30 @@ MonoBehaviour:
     - serializedVersion: 3
       time: 0
       value: 0
-      inSlope: 0
-      outSlope: 0
+      inSlope: 3.984115
+      outSlope: 3.984115
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
-      outWeight: 0
+      outWeight: 0.06021374
     - serializedVersion: 3
-      time: 0.17401458
-      value: 0.5982388
-      inSlope: 1.0263028
-      outSlope: 1.0263028
+      time: 0.14407963
+      value: 0.5579213
+      inSlope: 2.8293319
+      outSlope: 2.8293319
       tangentMode: 0
       weightedMode: 0
       inWeight: 0.33333334
-      outWeight: 0.33333334
+      outWeight: 0.1726829
     - serializedVersion: 3
-      time: 0.58393186
-      value: 0.55452573
-      inSlope: 1.1616882
-      outSlope: 1.1616882
+      time: 0.4416976
+      value: 1.0063066
+      inSlope: 0.07894749
+      outSlope: 0.07894749
       tangentMode: 0
       weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.6025738
-    - serializedVersion: 3
-      time: 0.6892909
-      value: 1.0076245
-      inSlope: 0.88809496
-      outSlope: 0.88809496
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
+      inWeight: 0.4866996
+      outWeight: 0.23470104
     - serializedVersion: 3
       time: 1
       value: 1
@@ -2902,7 +2907,7 @@ MonoBehaviour:
   minSpeedForEarRotation: 0.1
   maxSpeedForEarRotation: 4
   rigidBody: {fileID: 1605779976}
-  currentState: 2
+  currentState: 0
   battery: 100
 --- !u!54 &1605779976
 Rigidbody:
