@@ -1377,7 +1377,7 @@ GameObject:
   m_Component:
   - component: {fileID: 778313321}
   m_Layer: 6
-  m_Name: RobotTarget (1)
+  m_Name: RobotTarget1
   m_TagString: Untagged
   m_Icon: {fileID: 2488908585195742037, guid: 0000000000000000d000000000000000, type: 0}
   m_NavMeshLayer: 0
@@ -1392,7 +1392,7 @@ Transform:
   m_GameObject: {fileID: 778313320}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.5, z: 0}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1470,7 +1470,7 @@ GameObject:
   m_Component:
   - component: {fileID: 846155233}
   m_Layer: 6
-  m_Name: RobotTarget
+  m_Name: RobotTarget2
   m_TagString: Untagged
   m_Icon: {fileID: 2488908585195742037, guid: 0000000000000000d000000000000000, type: 0}
   m_NavMeshLayer: 0
@@ -2549,14 +2549,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1430565557}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.20104873, y: -0.09442447, z: 0.16724205, w: 0.96056944}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -0.123, y: 0.185, z: 0.024}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1481904782}
   m_Father: {fileID: 1605779974}
-  m_LocalEulerAnglesHint: {x: -20.773, y: -15.423, z: 22.597}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1481904781
 GameObject:
   m_ObjectHideFlags: 0
@@ -2820,6 +2820,7 @@ MonoBehaviour:
   moveSpeed: 25
   minFollowDistance: 2
   maxFollowDistance: 4
+  friction: 1
   followSmoothness: 0.02
   followCurve:
     serializedVersion: 2
@@ -2845,7 +2846,6 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  friction: 1
   rotationStability: 4
   maxAngularVelocity: 3
   rotationCurve:
@@ -2892,19 +2892,23 @@ MonoBehaviour:
     m_RotationOrder: 4
   hoverAmplitude: 0.3
   hoverFrequency: 1
-  verticalThreshold: 1
-  baseHeight: 2
+  verticalThreshold: 2
+  baseHeight: 1.5
+  maxSpeedHeight: 1.5
+  maxSpeedForHeight: 10
+  heightSpeedSmoothness: 0.05
   groundLayer:
     serializedVersion: 2
     m_Bits: 1
-  rotateEars: 0
+  rotateEars: 1
   leftEarPivot: {fileID: 1430565558}
   rightEarPivot: {fileID: 1756275909}
-  maxForwardTilt: 45
-  maxSidewaysTilt: 30
-  maxTwistTilt: 15
+  baseEarTilt: 15
+  maxMovementTilt: 45
+  earMovementResponseSpeed: 8
   earRotationSmoothness: 0.2
-  minSpeedForEarRotation: 0.1
+  idleAnimationSpeed: 1.5
+  idleAnimationAmount: 5
   maxSpeedForEarRotation: 4
   rigidBody: {fileID: 1605779976}
   currentState: 0
@@ -3259,14 +3263,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1756275908}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.17106122, y: 0.2123059, z: -0.16726242, w: 0.94746375}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.123, y: 0.185, z: 0.024}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1669001713}
   m_Father: {fileID: 1605779974}
-  m_LocalEulerAnglesHint: {x: -14.663, y: 28.359, z: -23.747}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1768376066
 GameObject:
   m_ObjectHideFlags: 0

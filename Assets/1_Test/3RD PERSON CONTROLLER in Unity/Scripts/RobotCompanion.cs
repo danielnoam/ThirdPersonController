@@ -1,4 +1,5 @@
     using System;
+    using System.Collections.Generic;
     using UnityEngine;
     using VInspector;
 
@@ -17,26 +18,29 @@
     public class RobotCompanion : MonoBehaviour
     {
         
-        [Tab("Movement")]
-        [Header("Movement")]
+        [Foldout("Movement")]
         [Tooltip("Base movement speed of the robot")]
-        [SerializeField] private float moveSpeed = 15f;
+        [SerializeField] private float moveSpeed = 25f;
         
         [Tooltip("Minimum distance to maintain from target")]
-        [SerializeField] private float minFollowDistance = 0.3f;
+        [SerializeField] private float minFollowDistance = 2f;
         
         [Tooltip("Maximum distance before reaching max speed")]
-        [SerializeField] private float maxFollowDistance = 1f;
-        
-        [Tooltip("How smoothly the robot accelerates and decelerates")]
-        [SerializeField] private float followSmoothness = 0.05f;
-        
-        [Tooltip("Animation curve controlling how speed changes based on distance")]
-        [SerializeField] private AnimationCurve followCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        [SerializeField] private float maxFollowDistance = 4f;
         
         [Tooltip("Friction coefficient applied when the robot has no target")]
         [SerializeField] private float friction = 1f;
         
+        [Tooltip("How smoothly the robot accelerates and decelerates")]
+        [SerializeField] private float followSmoothness = 0.02f;
+        
+        [Tooltip("Animation curve controlling how speed changes based on distance")]
+        [SerializeField] private AnimationCurve followCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        [EndFoldout]
+        
+        
+        
+        [Foldout("Rotation")]
         [Tooltip("How quickly the robot returns to its desired rotation")]
         [SerializeField] private float rotationStability = 4f;
         
@@ -45,52 +49,54 @@
         
         [Tooltip("Animation curve controlling how rotation speed changes based on angle difference")]
         [SerializeField] private AnimationCurve rotationCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
-
-        [Header("Hover")]
+        [EndFoldout]
+        
+        
+        [Foldout("Hover")]
         [Tooltip("Maximum distance the robot will hover up and down")]
         [SerializeField] private float hoverAmplitude = 0.3f;
-        
+
         [Tooltip("Speed of the hover movement cycle")]
         [SerializeField] private float hoverFrequency = 1f;
-        
+
         [Tooltip("Minimum vertical distance change required before the robot adjusts its height")]
         [SerializeField] private float verticalThreshold = 2f;
-        
-        [Tooltip("Height maintained above ground")]
-        [SerializeField] private float baseHeight = 2f;
-        
+
+        [Tooltip("Base height maintained above ground")]
+        [SerializeField] private float baseHeight = 1.5f;
+
+        [Tooltip("Additional height gained at maximum speed")]
+        [SerializeField] private float maxSpeedHeight = 1.5f;
+
+        [Tooltip("Speed at which maximum height boost is reached")]
+        [SerializeField] private float maxSpeedForHeight = 5f;
+
+        [Tooltip("How smoothly height changes with speed")]
+        [SerializeField] private float heightSpeedSmoothness = 0.1f;
+
         [Tooltip("Layers that the robot considers as ground for hover calculations")]
         [SerializeField] private LayerMask groundLayer;
-        [EndTab]
+        [EndFoldout]
 
 
 
-        [Tab("Ears")] 
+        [Foldout("Ears")] 
         [SerializeField] private bool rotateEars = true;
         [Tooltip("Transform reference for the left ear/antenna")]
         [SerializeField] private Transform leftEarPivot;
-        
+
         [Tooltip("Transform reference for the right ear/antenna")]
         [SerializeField] private Transform rightEarPivot;
-        
-        [Tooltip("Maximum rotation angle for forward/backward tilt (X axis)")]
-        [SerializeField] private float maxForwardTilt = 45f;
 
-        [Tooltip("Maximum rotation angle for left/right rotation (Y axis)")]
-        [SerializeField] private float maxSidewaysTilt = 30f;
+        [Tooltip("Maximum bend angle of the ears")]
+        [SerializeField] private float maxEarBend = 45f;
 
-        [Tooltip("Maximum rotation angle for side tilt (Z axis)")]
-        [SerializeField] private float maxTwistTilt = 15f;
-        
-        [Tooltip("How smoothly the ears rotate in response to movement")]
+        [Tooltip("How smoothly the ears rotate")]
         [SerializeField] private float earRotationSmoothness = 0.2f;
-        
-        [Tooltip("Minimum speed required to start ear rotation")]
-        [SerializeField] private float minSpeedForEarRotation = 0.1f;
-        
-        [Tooltip("Speed at which ears reach their maximum rotation")]
+
+        [Tooltip("Speed at which ears reach their maximum bend")]
         [SerializeField] private float maxSpeedForEarRotation = 4f;
-        [EndTab]
+        [EndFoldout]
 
         [Header("References")]
         [Tooltip("Reference to the robot's Rigidbody component")]
@@ -113,6 +119,7 @@
         private Vector3 _currentVelocity;
         private float _currentDesiredHeight;
         private float _hoverTime;
+        private float _lastStableHeight;
         private Vector3 _lastPosition;
         private Quaternion _leftEarBaseRotation;
         private Quaternion _rightEarBaseRotation;
@@ -290,57 +297,102 @@
        }
        
        
-       private void Hover()
-       {
-           float currentY = rigidBody.position.y;
-           float targetHeight;
+private void Hover()
+{
+    float currentY = rigidBody.position.y;
+    float targetHeight;
 
-           // Always check ground distance from current Y position
-           RaycastHit hit;
-           bool groundFound = Physics.Raycast(new Vector3(rigidBody.position.x, currentY, rigidBody.position.z), 
-               Vector3.down, out hit, Mathf.Infinity, groundLayer);
-           float groundHeight = groundFound ? hit.point.y : currentY;
+    // Calculate ground height using multiple raycasts
+    float groundHeight = GetGroundHeight();
 
-           if (currentState == RobotState.FollowPlayer)
-           {
-               // Calculate vertical distance between robot and target
-               float verticalDistance = Mathf.Abs(_playerFollowPosition.position.y - currentY);
-            
-               if (verticalDistance < verticalThreshold)
-               {
-                   // If vertical distance is below threshold, maintain current height
-                   targetHeight = _currentDesiredHeight;
-               }
-               else
-               {
-                   // Otherwise follow target height, but never go below base height from ground
-                   targetHeight = Mathf.Max(_playerFollowPosition.position.y, groundHeight + baseHeight);
-               }
-           }
-           else
-           {
-               // When no target, hover at baseHeight above ground
-               targetHeight = groundHeight + baseHeight;
-           }
+    // Calculate minimum allowed height (base layer)
+    float minAllowedHeight = groundHeight + baseHeight;
 
-           // Smoothly move the desired height
-           _currentDesiredHeight = Mathf.Lerp(_currentDesiredHeight, targetHeight, moveSpeed * 0.1f * Time.fixedDeltaTime);
+    // Calculate speed-based height boost (dynamic height layer)
+    float currentSpeed = rigidBody.linearVelocity.magnitude;
+    float speedRatio = Mathf.Clamp01(currentSpeed / maxSpeedForHeight);
+    float speedHeightBoost = maxSpeedHeight * speedRatio;
 
-           // Update hover time
-           _hoverTime += Time.fixedDeltaTime;
+    // Calculate target height based on state
+    if (currentState == RobotState.FollowPlayer && _playerFollowPosition != null)
+    {
+        float playerHeight = _playerFollowPosition.position.y;
+        float heightDifference = Mathf.Abs(playerHeight - _lastStableHeight);
         
-           // Calculate target position with hover
-           float hoverOffset = Mathf.Sin(_hoverTime * hoverFrequency) * hoverAmplitude;
-           float finalDesiredHeight = _currentDesiredHeight + hoverOffset;
+        // Check if player height is above minimum and if change exceeds threshold
+        if (playerHeight > minAllowedHeight + speedHeightBoost)
+        {
+            if (heightDifference > verticalThreshold)
+            {
+                // Player has moved significantly vertically - update stable height
+                _lastStableHeight = playerHeight;
+                targetHeight = playerHeight;
+            }
+            else
+            {
+                // Within threshold - maintain current stable height
+                targetHeight = _lastStableHeight;
+            }
+        }
+        else
+        {
+            // Below minimum height - use minimum height as stable height
+            _lastStableHeight = minAllowedHeight + speedHeightBoost;
+            targetHeight = _lastStableHeight;
+        }
+    }
+    else
+    {
+        // When not following player, hover at base height plus speed boost
+        targetHeight = minAllowedHeight + speedHeightBoost;
+    }
 
-           // Calculate velocity needed to reach position
-           float distanceToDesired = finalDesiredHeight - currentY;
-           float finalVelocity = distanceToDesired * moveSpeed* 0.1f;
+    // Smoothly move the desired height
+    _currentDesiredHeight = Mathf.Lerp(_currentDesiredHeight, targetHeight, 
+        moveSpeed * heightSpeedSmoothness * Time.fixedDeltaTime);
 
-           // Apply the new velocity while preserving X and Z
-           Vector3 currentVelocity = rigidBody.linearVelocity;
-           rigidBody.linearVelocity = new Vector3(currentVelocity.x, finalVelocity, currentVelocity.z);
-       }
+    // Add hover effect (final layer)
+    _hoverTime += Time.fixedDeltaTime;
+    float hoverOffset = Mathf.Sin(_hoverTime * hoverFrequency) * hoverAmplitude;
+    float finalDesiredHeight = _currentDesiredHeight + hoverOffset;
+
+    // Calculate velocity needed to reach position
+    float distanceToDesired = finalDesiredHeight - currentY;
+    float finalVelocity = distanceToDesired * moveSpeed;
+
+    // Apply the new velocity while preserving X and Z
+    Vector3 currentVelocity = rigidBody.linearVelocity;
+    rigidBody.linearVelocity = new Vector3(currentVelocity.x, finalVelocity, currentVelocity.z);
+}
+
+private float GetGroundHeight()
+{
+    Vector3 position = rigidBody.position;
+    float lowestHeight = position.y;
+
+    // Cast rays in a small grid pattern for better ground detection
+    Vector3[] offsets = new Vector3[]
+    {
+        Vector3.zero,                          // Center
+        new Vector3(0.5f, 0, 0.5f),           // Front-Right
+        new Vector3(-0.5f, 0, 0.5f),          // Front-Left
+        new Vector3(0.5f, 0, -0.5f),          // Back-Right
+        new Vector3(-0.5f, 0, -0.5f),         // Back-Left
+    };
+
+    foreach (Vector3 offset in offsets)
+    {
+        RaycastHit hit;
+        Vector3 rayStart = position + offset;
+        if (Physics.Raycast(rayStart, Vector3.down, out hit, Mathf.Infinity, groundLayer))
+        {
+            // Update lowest point found
+            lowestHeight = Mathf.Min(lowestHeight, hit.point.y);
+        }
+    }
+
+    return lowestHeight;
+}
 
        private void ApplyFriction()
        {
@@ -432,72 +484,54 @@
             if (!leftEarPivot || !rightEarPivot) return;
             if (!rotateEars) return;
 
+            // Get the movement direction in local space
+            Vector3 localVelocity = transform.InverseTransformDirection(rigidBody.linearVelocity);
+            Vector3 localAngularVelocity = transform.InverseTransformDirection(rigidBody.angularVelocity);
+            
+            float movementSpeed = rigidBody.linearVelocity.magnitude;
+            float rotationSpeed = rigidBody.angularVelocity.magnitude;
 
-            // Calculate velocity and rotation
-            _currentVelocity = (transform.position - _lastPosition) / Time.fixedDeltaTime;
-            _lastPosition = transform.position;
-            Vector3 angularVelocity = rigidBody.angularVelocity;
+            // Calculate bend strength for both movement and rotation
+            float movementBendStrength = Mathf.Clamp01(movementSpeed / maxSpeedForEarRotation);
+            float rotationBendStrength = Mathf.Clamp01(rotationSpeed / maxAngularVelocity);
 
-            // Remove vertical movement by projecting velocity onto horizontal plane
-            Vector3 horizontalVelocity = Vector3.ProjectOnPlane(_currentVelocity, Vector3.up);
+            // Calculate movement-based rotation
+            Vector3 movementRotation = new Vector3(
+                -localVelocity.z, // Forward/back movement causes up/down rotation
+                -localVelocity.x, // Left/right movement causes side rotation
+                0
+            ).normalized * (maxEarBend * movementBendStrength);
 
-            // Get speeds (using only horizontal movement)
-            float movementSpeed = horizontalVelocity.magnitude;
-            float rotationSpeed = angularVelocity.magnitude;
+            // Calculate rotation-based ear bend
+            // For the left ear
+            Vector3 leftRotationBend = new Vector3(
+                0,
+                localAngularVelocity.y, // Yaw rotation causes side bend
+                0
+            ) * (maxEarBend * rotationBendStrength);
 
-            // Calculate movement influence (ignoring vertical movement)
-            Vector3 moveDirection = (movementSpeed > 0.001f) ? -horizontalVelocity.normalized : Vector3.zero;
+            // For the right ear (opposite of left ear for rotation)
+            Vector3 rightRotationBend = new Vector3(
+                0,
+                localAngularVelocity.y, // Opposite direction for right ear
+                0
+            ) * (maxEarBend * rotationBendStrength);
 
-            // Calculate rotation influence
-            Vector3 rotateDirection = (rotationSpeed > 0.001f) ? -angularVelocity.normalized : Vector3.zero;
+            // Combine movement and rotation effects
+            Quaternion leftTargetRotation = Quaternion.Euler(movementRotation + leftRotationBend);
+            Quaternion rightTargetRotation = Quaternion.Euler(movementRotation + rightRotationBend);
 
-            // Combine influences and calculate total intensity
-            Vector3 totalInfluence = moveDirection + rotateDirection;
-            float totalSpeed = Mathf.Max(
-                Mathf.InverseLerp(minSpeedForEarRotation, maxSpeedForEarRotation, movementSpeed),
-                Mathf.InverseLerp(0, maxAngularVelocity, rotationSpeed)
-            );
-
-            // Convert influence to local space to apply different limits per axis
-            Vector3 localInfluence = transform.InverseTransformDirection(totalInfluence);
-
-            // Apply different max angles per axis
-            Vector3 scaledInfluence = new Vector3(
-                localInfluence.x * maxForwardTilt,
-                localInfluence.y * maxSidewaysTilt,
-                localInfluence.z * maxTwistTilt
-            ) * totalSpeed;
-
-            // Clamp the values to prevent over-rotation
-            scaledInfluence = new Vector3(
-                Mathf.Clamp(scaledInfluence.x, -maxForwardTilt, maxForwardTilt),
-                Mathf.Clamp(scaledInfluence.y, -maxSidewaysTilt, maxSidewaysTilt),
-                Mathf.Clamp(scaledInfluence.z, -maxTwistTilt, maxTwistTilt)
-            );
-
-            // Convert back to world space
-            Vector3 worldInfluence = transform.TransformDirection(scaledInfluence);
-
-            // Create rotation from clamped influence
-            Quaternion influenceRotation = worldInfluence != Vector3.zero 
-                ? Quaternion.FromToRotation(Vector3.up, Vector3.up + worldInfluence)
-                : Quaternion.identity;
-
-            // Apply to ears with base rotation
-            Quaternion targetLeftRotation = influenceRotation * _leftEarBaseRotation;
-            Quaternion targetRightRotation = influenceRotation * _rightEarBaseRotation;
-
-            // Smooth the transition
+            // Apply rotation with smoothing
             leftEarPivot.localRotation = Quaternion.Slerp(
                 leftEarPivot.localRotation,
-                targetLeftRotation,
-                1f - Mathf.Pow(earRotationSmoothness, Time.fixedDeltaTime)
+                leftTargetRotation * _leftEarBaseRotation,
+                1f - Mathf.Pow(earRotationSmoothness, Time.deltaTime)
             );
 
             rightEarPivot.localRotation = Quaternion.Slerp(
                 rightEarPivot.localRotation,
-                targetRightRotation,
-                1f - Mathf.Pow(earRotationSmoothness, Time.fixedDeltaTime)
+                rightTargetRotation * _rightEarBaseRotation,
+                1f - Mathf.Pow(earRotationSmoothness, Time.deltaTime)
             );
         }
        
@@ -533,48 +567,19 @@
             DrawMovementGizmos();
             DrawVerticalThresholdGizmos();
             DrawRotationGizmos();
-            DrawSpeedIndicatorGizmos();
         }
     }
 
     private void DrawGroundAndHoverGizmos()
     {
-        Vector3 rayStart = transform.position;
-        RaycastHit hit;
-        
-        if (Physics.Raycast(rayStart, Vector3.down, out hit, Mathf.Infinity, groundLayer))
-        {
-            // Ground detection ray
-            Gizmos.color = Color.green;
-            Gizmos.DrawLine(rayStart, hit.point);
-            Gizmos.DrawWireSphere(hit.point, 0.1f);
+        // Draw multi-point ground detection
+        DrawGroundDetectionPoints();
 
-            // Base hover height
-            Gizmos.color = Color.yellow;
-            float minHoverHeight = hit.point.y + baseHeight;
-            Vector3 minHoverPoint = new Vector3(hit.point.x, minHoverHeight, hit.point.z);
-            Gizmos.DrawWireSphere(minHoverPoint, 0.1f);
-            Gizmos.DrawLine(hit.point, minHoverPoint);
+        // Draw hover layers
+        DrawHoverLayers();
 
-            // Current hover range
-            Gizmos.color = Color.cyan;
-            Vector3 hoverMin = new Vector3(transform.position.x, _currentDesiredHeight - hoverAmplitude, transform.position.z);
-            Vector3 hoverMax = new Vector3(transform.position.x, _currentDesiredHeight + hoverAmplitude, transform.position.z);
-            Gizmos.DrawWireSphere(hoverMin, 0.1f);
-            Gizmos.DrawWireSphere(hoverMax, 0.1f);
-            Gizmos.DrawLine(hoverMin, hoverMax);
-
-            // Draw current hover position indicator
-            Gizmos.color = new Color(0f, 1f, 1f, 0.5f); // Semi-transparent cyan
-            Vector3 currentHoverPos = new Vector3(transform.position.x, _currentDesiredHeight, transform.position.z);
-            Gizmos.DrawWireSphere(currentHoverPos, 0.15f);
-        }
-        else
-        {
-            // No ground found
-            Gizmos.color = Color.red;
-            Gizmos.DrawLine(rayStart, rayStart + Vector3.down * 100f);
-        }
+        // Draw speed-based height adjustment
+        DrawSpeedHeightGizmos();
     }
 
     private void DrawMovementGizmos()
@@ -685,29 +690,127 @@
             DrawGizmosArc(transform.position, 1f, Vector3.up, transform.forward, angle);
         }
     }
-
-    private void DrawSpeedIndicatorGizmos()
+    
+    
+    private void DrawGroundDetectionPoints()
+{
+    Vector3 position = transform.position;
+    Vector3[] offsets = new Vector3[]
     {
-        if (rigidBody != null)
+        Vector3.zero,                          // Center
+        new Vector3(0.5f, 0, 0.5f),           // Front-Right
+        new Vector3(-0.5f, 0, 0.5f),          // Front-Left
+        new Vector3(0.5f, 0, -0.5f),          // Back-Right
+        new Vector3(-0.5f, 0, -0.5f),         // Back-Left
+    };
+
+    float lowestPoint = float.MaxValue;
+    Dictionary<Vector3, float> groundPoints = new Dictionary<Vector3, float>();
+
+    // Draw each ground detection ray
+    foreach (Vector3 offset in offsets)
+    {
+        Vector3 rayStart = position + offset;
+        RaycastHit hit;
+        
+        if (Physics.Raycast(rayStart, Vector3.down, out hit, Mathf.Infinity, groundLayer))
         {
-            Vector3 velocity = rigidBody.linearVelocity;
-            float speed = velocity.magnitude;
-            float speedRatio = speed / moveSpeed;
-            
-            // Draw speed gauge
-            Vector3 gaugePos = transform.position + Vector3.up * 1f;
-            float gaugeWidth = 1f;
-            float gaugeHeight = 0.1f;
-            
-            // Background
-            Gizmos.color = new Color(0.2f, 0.2f, 0.2f, 0.5f);
-            Gizmos.DrawCube(gaugePos, new Vector3(gaugeWidth, gaugeHeight, 0.01f));
-            
-            // Speed indicator
-            Gizmos.color = Color.Lerp(Color.green, Color.red, speedRatio);
-            Vector3 indicatorPos = gaugePos - new Vector3(gaugeWidth * 0.5f * (1f - speedRatio), 0f, 0f);
-            Gizmos.DrawCube(indicatorPos, new Vector3(gaugeWidth * speedRatio, gaugeHeight, 0.02f));
+            // Store ground point for later use
+            groundPoints[offset] = hit.point.y;
+            lowestPoint = Mathf.Min(lowestPoint, hit.point.y);
+
+            // Draw ray and hit point
+            Gizmos.color = Color.green;
+            Gizmos.DrawLine(rayStart, hit.point);
+            Gizmos.DrawWireSphere(hit.point, 0.1f);
         }
+        else
+        {
+            // Draw failed raycast
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(rayStart, rayStart + Vector3.down * 100f);
+        }
+    }
+
+    // Draw ground plane at lowest point
+    if (lowestPoint != float.MaxValue)
+    {
+        Gizmos.color = new Color(0.5f, 1f, 0.5f, 0.2f); // Transparent green
+        Vector3 center = new Vector3(position.x, lowestPoint, position.z);
+        Gizmos.DrawWireCube(center, new Vector3(2f, 0.01f, 2f));
+    }
+}
+
+private void DrawHoverLayers()
+{
+    Vector3 position = transform.position;
+    float groundHeight = GetGroundHeight();
+
+    // Base height layer
+    float baseHeightY = groundHeight + baseHeight;
+    Gizmos.color = new Color(1f, 1f, 0f, 0.3f); // Transparent yellow
+    DrawHoverLayer(baseHeightY, "Base Height");
+
+    // Current speed-based height
+    float currentSpeed = rigidBody.linearVelocity.magnitude;
+    float speedRatio = Mathf.Clamp01(currentSpeed / maxSpeedForHeight);
+    float speedHeightBoost = maxSpeedHeight * speedRatio;
+    float speedAdjustedHeight = baseHeightY + speedHeightBoost;
+    Gizmos.color = new Color(0f, 1f, 1f, 0.3f); // Transparent cyan
+    DrawHoverLayer(speedAdjustedHeight, "Speed Adjusted");
+
+    // Current desired height (before hover effect)
+    Gizmos.color = new Color(1f, 1f, 1f, 0.3f); // Transparent white
+    DrawHoverLayer(_currentDesiredHeight, "Target Height");
+
+    // Hover effect range
+    Gizmos.color = new Color(1f, 0.5f, 1f, 0.2f); // Transparent pink
+    float hoverMin = _currentDesiredHeight - hoverAmplitude;
+    float hoverMax = _currentDesiredHeight + hoverAmplitude;
+    DrawHoverLayer(hoverMin, "Hover Min");
+    DrawHoverLayer(hoverMax, "Hover Max");
+    
+    // Draw vertical lines connecting layers
+    Gizmos.color = new Color(1f, 1f, 1f, 0.1f); // Very transparent white
+    Vector3 center = new Vector3(position.x, 0, position.z);
+    Gizmos.DrawLine(
+        center + new Vector3(0, groundHeight, 0),
+        center + new Vector3(0, hoverMax, 0)
+    );
+}
+
+private void DrawHoverLayer(float height, string label)
+{
+    Vector3 position = transform.position;
+    Vector3 center = new Vector3(position.x, height, position.z);
+    
+    // Draw plane
+    Gizmos.DrawWireCube(center, new Vector3(1f, 0.01f, 1f));
+    
+    // Draw small sphere at robot's position projected onto this layer
+    Vector3 projection = new Vector3(position.x, height, position.z);
+    Gizmos.DrawWireSphere(projection, 0.1f);
+    
+    }
+
+    private void DrawSpeedHeightGizmos()
+    {
+        // Draw speed-based height adjustment gauge
+        Vector3 position = transform.position;
+        float currentSpeed = rigidBody.linearVelocity.magnitude;
+        float speedRatio = Mathf.Clamp01(currentSpeed / maxSpeedForHeight);
+        
+        Vector3 gaugeStart = position + Vector3.right * 1.5f;
+        Vector3 gaugeEnd = gaugeStart + Vector3.up * maxSpeedHeight;
+        
+        // Draw full range
+        Gizmos.color = new Color(0.5f, 0.5f, 0.5f, 0.5f);
+        Gizmos.DrawLine(gaugeStart, gaugeEnd);
+        
+        // Draw current value
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawLine(gaugeStart, gaugeStart + Vector3.up * (maxSpeedHeight * speedRatio));
+        Gizmos.DrawWireSphere(gaugeStart + Vector3.up * (maxSpeedHeight * speedRatio), 0.05f);
     }
 
     private void DrawGizmosCircle(Vector3 center, float radius)
