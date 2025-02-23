@@ -887,6 +887,7 @@ namespace VHierarchy
                 {
                     if (sceneIdMap == null) return;
                     if (currentSceneGuid != originalSceneGuid) return;
+                    if (!go.scene.isLoaded) return; // can happen when setting icons via api
 
 
                     var curInstanceIdsHash = go.scene.GetRootGameObjects().FirstOrDefault()?.GetInstanceID() ?? 0;
@@ -1778,7 +1779,7 @@ namespace VHierarchy
 
 
 
-        public const string version = "2.1.0";
+        public const string version = "2.1.1";
 
     }
 

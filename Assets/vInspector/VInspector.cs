@@ -1541,7 +1541,7 @@ namespace VInspector
 
 
 
-        const string version = "2.0.12";
+        const string version = "2.0.13";
 
 
     }

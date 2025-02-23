@@ -904,6 +904,19 @@ namespace VHierarchy.Libs
 
             }
 
+            foreach (var r in go.GetComponentsInChildren<RectTransform>())
+            {
+                var localBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(r);
+                var worldBounds = new Bounds(r.TransformPoint(localBounds.center), r.TransformVector(localBounds.size));
+
+                if (bounds == default)
+                    bounds = worldBounds;
+                else
+                    bounds.Encapsulate(worldBounds);
+
+            }
+
+
             if (bounds == default)
                 bounds.center = go.transform.position;
 
