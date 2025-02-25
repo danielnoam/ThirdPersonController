@@ -9,7 +9,8 @@ public enum RobotState
     GoToTarget = 1,
     FollowingPlayer = 2,
     Sitting = 3,
-    Off = 4,
+    Interacting = 4,
+    Off = 5,
 }
 
 [RequireComponent(typeof(Rigidbody))]
