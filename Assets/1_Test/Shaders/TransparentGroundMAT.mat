@@ -56,7 +56,7 @@ Material:
     - _QueueControl: 0
     - _QueueOffset: 0
     m_Colors:
-    - _Ground_Color: {r: 1, g: 1, b: 1, a: 0.3529412}
+    - _Ground_Color: {r: 1, g: 1, b: 1, a: 0}
     - _Intersection_Color: {r: 1, g: 0, b: 0.14509821, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

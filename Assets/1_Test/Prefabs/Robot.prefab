@@ -526,7 +526,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 0
+  m_UseGravity: 1
   m_IsKinematic: 0
   m_Interpolate: 2
   m_Constraints: 0
@@ -567,7 +567,7 @@ MonoBehaviour:
   fullBattery: 100
   lowBattery: 20
   currentBattery: 100
-  currentState: 0
+  currentState: 5
   horizontalMoveSpeed: 25
   minFollowDistance: 2
   maxFollowDistance: 4
@@ -734,7 +734,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &5612748022774488601
 Transform:
   m_ObjectHideFlags: 0

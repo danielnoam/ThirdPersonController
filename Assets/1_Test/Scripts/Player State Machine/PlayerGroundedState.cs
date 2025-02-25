@@ -82,5 +82,13 @@ public class PlayerGroundedState : PlayerBaseState
             StateMachine.SwitchState(StateMachine.JumpingState);
             return;
         }
+        
+        if (StateMachine.CanInteract && StateMachine.input.PlayerInteractInput)
+        {
+            StateMachine.currentInteractable.Interact(StateMachine.gameObject);
+            StateMachine.input.ConsumePlayerInteractBuffer();
+            StateMachine.SwitchState(StateMachine.InteractingState);
+        }
+        
     }
 }

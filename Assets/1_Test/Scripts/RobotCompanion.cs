@@ -208,7 +208,13 @@ public class RobotCompanion : MonoBehaviour
 
    public void InteractWith(InteractableBase interactable)
    {
+       if (!CanCommend()) return;
+       
+       // Go to the interactable objects position
        GoToTarget(interactable.InteractPosition);
+       
+       // Interact with the object when reaching the positions
+       interactable.Interact(gameObject);
    }
    
    private void GoToTarget(Transform targetToGoTo)
@@ -231,7 +237,7 @@ public class RobotCompanion : MonoBehaviour
    [Button]
    public void Idle()
    {
-       if (!IsOn()) return;
+       if (!CanCommend()) return;
        
        _target = null;
        currentState = RobotState.Idle;
@@ -242,7 +248,7 @@ public class RobotCompanion : MonoBehaviour
    [Button]
    public void SitDown()
    {
-       if (!IsOn()) return;
+       if (!CanCommend()) return;
 
        currentState = RobotState.Sitting;
        rigidBody.useGravity = false;
@@ -260,6 +266,7 @@ public class RobotCompanion : MonoBehaviour
    {
        currentState = RobotState.Off;
        rigidBody.useGravity = true;
+       eye.gameObject.SetActive(false);
    }
 
    [Button]
@@ -268,6 +275,7 @@ public class RobotCompanion : MonoBehaviour
        currentState = RobotState.Idle;
        rigidBody.useGravity = false;
        rigidBody.isKinematic = false;
+       eye.gameObject.SetActive(true);
    }
 
    #endregion Commends ------------------------------------------------------------------------------
@@ -660,8 +668,6 @@ public class RobotCompanion : MonoBehaviour
 
    private void UpdateEye()
    {
-       eye.gameObject.SetActive(IsOn());
-
        if (currentBattery <= 0)
        {
            eyeLight.intensity = 0;
@@ -690,10 +696,13 @@ public class RobotCompanion : MonoBehaviour
 
    private bool CanCommend()
    {
-           return currentState != RobotState.Off;
+           return currentState != RobotState.Off && currentState != RobotState.Interacting;
    }
-   
-   
+
+   public void OnInteractionComplete(InteractableBase interactable)
+   {
+       FollowPlayer();
+   }
 
    #endregion Utility ------------------------------------------------------------------------
 

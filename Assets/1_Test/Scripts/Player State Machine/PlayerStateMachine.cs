@@ -12,6 +12,7 @@ public enum PlayerAnimationState
     Jump = 1,
     Fall = 2,
     Landing = 3,
+    Interact = 4,
 }
 
 
@@ -25,6 +26,7 @@ public class PlayerStateMachine : MonoBehaviour
     public PlayerJumpingState JumpingState { get; private set; }
     public PlayerFallingState FallingState { get; private set; }
     public PlayerLandingState LandingState { get; private set; }
+    public PlayerInteractingState InteractingState { get; private set; }
 
     [Header("Movement")]
     [Tooltip("Walking speed when holding the walk button")]
@@ -86,14 +88,15 @@ public class PlayerStateMachine : MonoBehaviour
     [Header("References")]
     [SerializeField] private CinemachineCamera freeLookCamera;
     [SerializeField] private CharacterController controller;
-    [SerializeField] private RobotCompanion robot;
+    
     [SerializeField] private Animator animator;
     [SerializeField] private TextMeshProUGUI debugText;
     
     
 
     public PlayerInput input { get; private set; }
-    public InteractableBase currentInteractable { get; private set; }
+    public InteractableBase currentInteractable { get;  set; }
+    public RobotCompanion robot { get;  set; }
     public float AirTime { get; private set; }
 
     public float FallTime { get; private set; }
@@ -102,6 +105,7 @@ public class PlayerStateMachine : MonoBehaviour
 
     public float activeMoveSpeed { get; private set; }
     public bool IsGrounded { get; private set; }
+    public bool CanInteract { get; private set; }
     public bool LockSprinting { get; private set; }
     
     
@@ -126,6 +130,7 @@ public class PlayerStateMachine : MonoBehaviour
         JumpingState = new PlayerJumpingState(this);
         FallingState = new PlayerFallingState(this);
         LandingState = new PlayerLandingState(this);
+        InteractingState = new PlayerInteractingState(this);
         
         if (freeLookCamera == null) Debug.LogError("Cinemachine cameras not assigned!");
 
@@ -150,25 +155,24 @@ public class PlayerStateMachine : MonoBehaviour
         CurrentState.FixedUpdateState();
     }
 
-    private void OnTriggerStay(Collider other)
+    private void OnTriggerEnter(Collider other)
     {
         currentInteractable = other.GetComponent<InteractableBase>();
         currentInteractable.SetHighlight(true);
-        
-        if (currentInteractable)
+    }
+
+    private void OnTriggerStay(Collider other)
+    {
+        if (other.GetComponent<InteractableBase>() == currentInteractable)
         {
-            if (currentInteractable.PlayerCanInteract && input.PlayerInteractInput)
-            {
-                currentInteractable.Interact();
-                input.ConsumePlayerInteractBuffer();
-            }
+            // Allow player interaction
+            CanInteract = currentInteractable.PlayerCanInteract;
             
+            // Allow robot interaction
             if (currentInteractable.RobotCanInteract && input.RobotInteractInput)
             {
-                
                 // Tell robot to go to the object and then interact with it
                 robot.InteractWith(currentInteractable);
-                currentInteractable.Interact();
                 input.ConsumeRobotInteractBuffer();
             }
         }
@@ -180,9 +184,10 @@ public class PlayerStateMachine : MonoBehaviour
         {
             currentInteractable.SetHighlight(false);
             currentInteractable = null;
+            CanInteract = false;
         }
-        
     }
+    
 
 
     #region State Control ---------------------------------------------------------------
@@ -192,6 +197,11 @@ public class PlayerStateMachine : MonoBehaviour
         CurrentState?.ExitState();
         CurrentState = newState;
         CurrentState.EnterState();
+    }
+    
+    public void OnInteractionComplete(InteractableBase interactable)
+    {
+        InteractingState.OnInteractionComplete(interactable);
     }
 
     #endregion State Control ---------------------------------------------------------------
@@ -316,6 +326,7 @@ public class PlayerStateMachine : MonoBehaviour
             PlayerJumpingState => PlayerAnimationState.Jump,
             PlayerFallingState => PlayerAnimationState.Fall,
             PlayerLandingState => PlayerAnimationState.Landing,
+            PlayerInteractingState => PlayerAnimationState.Interact,
             _ => PlayerAnimationState.Grounded
         };
         animator.SetInteger(_stateHash, (int)currentAnimState);

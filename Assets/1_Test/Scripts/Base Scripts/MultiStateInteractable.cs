@@ -2,21 +2,22 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.Events;
 
-
 [System.Serializable]
 public class StateData
 {
     public string stateName;
-    public UnityEvent onStateEnter;
-    public UnityEvent onStateExit;
+    public UnityEvent onState; // Single event for the state
 }
+
 public class MultiStateInteractable : InteractableBase
 {
     [Header("State Settings")]
-    [SerializeField] protected List<StateData> states = new List<StateData>();
     [SerializeField] protected bool loopStates = true;
+    [SerializeField] protected List<StateData> states = new List<StateData>();
+    
     
     protected int CurrentStateIndex = -1;
+    protected int NextStateIndex = -1;
 
     protected override void Start()
     {
@@ -25,47 +26,76 @@ public class MultiStateInteractable : InteractableBase
         // Enter initial state if any exists
         if (states.Count > 0)
         {
-            SetState(0);
+            SetState(0, true); // Force set the initial state
         }
     }
 
-    public override void OnInteractionStart()
+    public override void OnInteractionStart(GameObject interactor = null)
     {
         if (!CanInteract || states.Count == 0) return;
 
-        // First run base interaction events
-        base.OnInteractionStart();
-
-        // Exit current state
-        if (CurrentStateIndex >= 0)
-        {
-            states[CurrentStateIndex].onStateExit?.Invoke();
-        }
-
-        // Move to next state
+        // Store the interactor and mark as interacting
+        currentInteractor = interactor;
+        isInteracting = true;
+        
+        // Run base interaction events without timer
+        onInteractStartEvents?.Invoke();
+        
+        // Calculate the next state index
         if (loopStates)
         {
-            SetState((CurrentStateIndex + 1) % states.Count);
+            NextStateIndex = (CurrentStateIndex + 1) % states.Count;
         }
         else if (CurrentStateIndex < states.Count - 1)
         {
-            SetState(CurrentStateIndex + 1);
+            NextStateIndex = CurrentStateIndex + 1;
+        }
+        else
+        {
+            // No more states to advance to if not looping
+            NextStateIndex = -1;
+        }
+        
+        // Start the interaction timer
+        if (interactionTime > 0)
+        {
+            if (interactionCoroutine != null)
+            {
+                StopCoroutine(interactionCoroutine);
+            }
+            interactionCoroutine = StartCoroutine(InteractionTimer());
+        }
+        else
+        {
+            // If no timer, complete interaction immediately
+            OnInteractionEnd(interactor);
         }
     }
 
-    public override void OnInteractionEnd()
+    public override void OnInteractionEnd(GameObject interactor = null)
     {
+        // Change to the next state if one was determined
+        if (NextStateIndex >= 0)
+        {
+            SetState(NextStateIndex);
+            NextStateIndex = -1;
+        }
+        
         // Run base end interaction events
-        base.OnInteractionEnd();
+        base.OnInteractionEnd(interactor);
     }
 
-    protected virtual void SetState(int newStateIndex)
+    protected virtual void SetState(int newStateIndex, bool forceSet = false)
     {
         if (newStateIndex < 0 || newStateIndex >= states.Count) return;
         
-        CurrentStateIndex = newStateIndex;
-        states[CurrentStateIndex].onStateEnter?.Invoke();
-        
-        Debug.Log($"Entered state: {states[CurrentStateIndex].stateName}");
+        // Only set the state if we're not already in it or if force set is true
+        if (CurrentStateIndex != newStateIndex || forceSet)
+        {
+            CurrentStateIndex = newStateIndex;
+            states[CurrentStateIndex].onState?.Invoke();
+            
+            Debug.Log($"Set state: {states[CurrentStateIndex].stateName}");
+        }
     }
 }
