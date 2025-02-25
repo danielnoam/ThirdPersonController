@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.Events;
 
+
+
 public interface IInteractable
 {
     void OnInteractionStart(GameObject interactor = null);

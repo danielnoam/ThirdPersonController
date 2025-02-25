@@ -95,7 +95,7 @@ public class PlayerStateMachine : MonoBehaviour
     
 
     public PlayerInput input { get; private set; }
-    public InteractableBase currentInteractable { get;  set; }
+    public MultiStateInteractable currentInteractable { get;  set; }
     public RobotCompanion robot { get;  set; }
     public float AirTime { get; private set; }
 
@@ -141,6 +141,11 @@ public class PlayerStateMachine : MonoBehaviour
         SwitchState(GroundedState);
     }
 
+    private void Start()
+    {
+        robot = FindFirstObjectByType<RobotCompanion>();
+    }
+
     private void Update()
     {
         CheckGrounded();
@@ -157,30 +162,42 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        currentInteractable = other.GetComponent<InteractableBase>();
-        currentInteractable.SetHighlight(true);
+        other.TryGetComponent(out MultiStateInteractable interactable);
+        
+        if (interactable)
+        {
+            currentInteractable = interactable;
+            currentInteractable.SetHighlight(true);
+        }
     }
 
     private void OnTriggerStay(Collider other)
     {
-        if (other.GetComponent<InteractableBase>() == currentInteractable)
+        other.TryGetComponent(out MultiStateInteractable interactable);
+        
+        if (interactable == currentInteractable)
         {
             // Allow player interaction
-            CanInteract = currentInteractable.PlayerCanInteract;
+            CanInteract = currentInteractable.PlayerCanInteract();
             
             // Allow robot interaction
-            if (currentInteractable.RobotCanInteract && input.RobotInteractInput)
+            if (robot && currentInteractable.RobotCanInteract() && input.RobotInteractInput)
             {
-                // Tell robot to go to the object and then interact with it
-                robot.InteractWith(currentInteractable);
                 input.ConsumeRobotInteractBuffer();
+                robot.InteractWith(currentInteractable);
+            }
+
+            if (CanInteract && !currentInteractable.Highlighted())
+            {
+                currentInteractable.SetHighlight(true);
             }
         }
     }
     
     private void OnTriggerExit(Collider other)
     {
-        if (other.GetComponent<InteractableBase>() == currentInteractable)
+        other.TryGetComponent(out MultiStateInteractable interactable);
+        if (interactable == currentInteractable)
         {
             currentInteractable.SetHighlight(false);
             currentInteractable = null;
@@ -199,7 +216,7 @@ public class PlayerStateMachine : MonoBehaviour
         CurrentState.EnterState();
     }
     
-    public void OnInteractionComplete(InteractableBase interactable)
+    public void OnInteractionComplete(MultiStateInteractable interactable)
     {
         InteractingState.OnInteractionComplete(interactable);
     }

@@ -20,10 +20,10 @@ public class RobotCompanion : MonoBehaviour
     [Header("State")]
     [SerializeField, Min(0)] private int fullBattery = 100;
     [SerializeField, Min(0)] private int lowBattery = 20;
-    [SerializeField, Min(0)] private int currentBattery;
+    [SerializeField, Min(0)] private int currentBattery = 100;
     [SerializeField] private RobotState currentState;
     
-    
+
     [Foldout("Horizontal Movement")]
     [Tooltip("Base movement speed of the robot")]
     [SerializeField] private float horizontalMoveSpeed = 25f;
@@ -46,7 +46,7 @@ public class RobotCompanion : MonoBehaviour
     
     
     
-    [Foldout("Vertical movement")]
+    [Foldout("Vertical Movement")]
     
     [Tooltip("Vertical movement speed of the robot")]
     [SerializeField] private float verticalMoveSpeed = 5f;
@@ -138,6 +138,9 @@ public class RobotCompanion : MonoBehaviour
 
     private Color _defaultEyeLightColor;
     private float _fullEyeLightIntensity;
+    
+    private MultiStateInteractable _currentInteractable;
+    private float _interactDistance = 0f; 
 
    private void Awake()
    {
@@ -176,25 +179,30 @@ public class RobotCompanion : MonoBehaviour
    private void FixedUpdate()
    {
        ApplyFriction();
-       
+    
        if (IsOn())
        {
            HandleRotation();
-           
+        
            switch (currentState)
            {
                case RobotState.GoToTarget:
                    AdjustHeight();
+                   Move(_target);
+                   CheckIfReachedTarget(); 
                    break;
                case RobotState.FollowingPlayer:
                    AdjustHeight();
                    Follow();
                    break;
-               case  RobotState.Idle:
+               case RobotState.Idle:
                    AdjustHeight();
                    break;
                case RobotState.Sitting:
                    HandleSitting();
+                   break;
+               case RobotState.Interacting:
+
                    break;
            }
        }
@@ -206,22 +214,30 @@ public class RobotCompanion : MonoBehaviour
    #region Commends ------------------------------------------------------------------------------
 
 
-   public void InteractWith(InteractableBase interactable)
+   public void InteractWith(MultiStateInteractable interactable)
    {
        if (!CanCommend()) return;
-       
+    
+       // Store the current interactable
+       _currentInteractable = interactable;
+    
        // Go to the interactable objects position
        GoToTarget(interactable.InteractPosition);
-       
-       // Interact with the object when reaching the positions
-       interactable.Interact(gameObject);
    }
    
    private void GoToTarget(Transform targetToGoTo)
    {
        if (!targetToGoTo || !IsOn()) return;
-       
+    
        _target = targetToGoTo;
+    
+       // If going to a target that's not related to an interaction
+       if (_currentInteractable == null || _currentInteractable.InteractPosition != targetToGoTo)
+       {
+           // Clear current interactable if this is a different target
+           _currentInteractable = null;
+       }
+    
        currentState = RobotState.GoToTarget;
    }
    
@@ -534,6 +550,64 @@ public class RobotCompanion : MonoBehaviour
            rigidBody.linearVelocity = newVelocity;
        }
    }
+   
+       private void Move(Transform target)
+        {
+
+       // Calculate the direction to the target in the horizontal plane only
+       Vector3 targetPosition = new Vector3(target.position.x, transform.position.y, target.position.z);
+       Vector3 directionToTarget = (targetPosition - transform.position);
+       
+       // Calculate distance to target
+       float distanceToTarget = directionToTarget.magnitude;
+       
+       // Get current horizontal velocity
+       Vector3 currentHorizontalVelocity = new Vector3(
+           rigidBody.linearVelocity.x,
+           0f,
+           rigidBody.linearVelocity.z
+       );
+       
+       // Calculate desired velocity
+       Vector3 desiredVelocity = Vector3.zero;
+       
+       if (distanceToTarget > minFollowDistance)
+       {
+           // Normalize the distance between min and max follow distance
+           float normalizedDistance = Mathf.Clamp01(
+               (distanceToTarget - minFollowDistance) / (maxFollowDistance - minFollowDistance)
+           );
+           
+           // Apply the curve to get the speed multiplier
+           float speedMultiplier = followCurve.Evaluate(normalizedDistance);
+           
+           // Calculate base desired velocity
+           Vector3 moveDirection = directionToTarget.normalized;
+           desiredVelocity = moveDirection * (horizontalMoveSpeed * speedMultiplier);
+       }
+       
+       // Calculate damping force
+       Vector3 dampingForce = -currentHorizontalVelocity * followSmoothness;
+       
+       // Calculate acceleration needed to reach desired velocity
+       Vector3 acceleration = (desiredVelocity - currentHorizontalVelocity) * (1f - followSmoothness);
+       
+       // Combine forces
+       Vector3 totalForce = acceleration + dampingForce;
+       
+       // Apply forces over time
+       Vector3 velocityChange = totalForce * Time.fixedDeltaTime;
+       
+       // Create new velocity vector, preserving Y component (handled by hover)
+       Vector3 newVelocity = new Vector3(
+           currentHorizontalVelocity.x + velocityChange.x,
+           rigidBody.linearVelocity.y,
+           currentHorizontalVelocity.z + velocityChange.z
+       );
+       
+       // Apply final velocity
+       rigidBody.linearVelocity = newVelocity;
+   }
 
    #endregion Horizontal movement -------------------------------------------------------------------------------
    
@@ -688,19 +762,51 @@ public class RobotCompanion : MonoBehaviour
            eyeLight.intensity = Mathf.Lerp(minIntensity, _fullEyeLightIntensity, normalizedBattery);
        }
    }
+   
+   private void CheckIfReachedTarget()
+   {
+       if (_target) return;
+    
+       // Calculate distance to target (horizontal only)
+       Vector3 targetPosition = new Vector3(_target.position.x, transform.position.y, _target.position.z);
+       float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
+    
+       // If we're close enough to the target
+       if (distanceToTarget <= _interactDistance)
+       {
+           // If we have an interactable object, interact with it
+           if (_currentInteractable)
+           {
+               // Change state to interacting
+               currentState = RobotState.Interacting;
+            
+               // Stop movement
+               rigidBody.linearVelocity = Vector3.zero;
+            
+               // Perform the interaction
+               _currentInteractable.Interact(gameObject);
+           }
+           else
+           {
+               // No interactable, just go to idle
+               Idle();
+           }
+       }
+   }
 
    private bool IsOn()
    {
-       return  currentState != RobotState.Off;
+       return  currentState != RobotState.Off && currentBattery > 0;
    }
 
    private bool CanCommend()
    {
-           return currentState != RobotState.Off && currentState != RobotState.Interacting;
+           return IsOn() && currentState != RobotState.Interacting;
    }
 
-   public void OnInteractionComplete(InteractableBase interactable)
+   public void OnInteractionComplete(MultiStateInteractable interactable)
    {
+       _currentInteractable = null;
        FollowPlayer();
    }
 
