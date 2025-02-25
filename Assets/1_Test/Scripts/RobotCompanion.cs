@@ -140,7 +140,7 @@ public class RobotCompanion : MonoBehaviour
     private float _fullEyeLightIntensity;
     
     private MultiStateInteractable _currentInteractable;
-    private float _interactDistance = 0f; 
+    private float _interactDistance = 0.5f; 
 
    private void Awake()
    {
@@ -237,7 +237,7 @@ public class RobotCompanion : MonoBehaviour
            // Clear current interactable if this is a different target
            _currentInteractable = null;
        }
-    
+       
        currentState = RobotState.GoToTarget;
    }
    
@@ -530,7 +530,7 @@ public class RobotCompanion : MonoBehaviour
    private void ApplyFriction()
    {
        // Only apply friction when there's no target
-       if (_target == null)
+       if (_target)
        {
            // Get current velocity
            Vector3 currentVelocity = rigidBody.linearVelocity;
@@ -765,11 +765,12 @@ public class RobotCompanion : MonoBehaviour
    
    private void CheckIfReachedTarget()
    {
-       if (_target) return;
+       if (!_target) return;
     
        // Calculate distance to target (horizontal only)
        Vector3 targetPosition = new Vector3(_target.position.x, transform.position.y, _target.position.z);
        float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
+       print("Distance to target: " + distanceToTarget);
     
        // If we're close enough to the target
        if (distanceToTarget <= _interactDistance)
@@ -785,11 +786,13 @@ public class RobotCompanion : MonoBehaviour
             
                // Perform the interaction
                _currentInteractable.Interact(gameObject);
+               print("Interacting with " + _currentInteractable.name);
            }
            else
            {
                // No interactable, just go to idle
                Idle();
+               print("Reached target but no interactable object found");
            }
        }
    }
