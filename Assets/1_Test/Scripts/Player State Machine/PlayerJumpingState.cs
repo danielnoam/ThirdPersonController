@@ -32,8 +32,13 @@ public class PlayerJumpingState : PlayerBaseState
 
     public override void FixedUpdateState()
     {
+        // Create movement vector using the calculated speed and direction
         Vector3 movement = _moveDirection * _currentSpeed;
         movement.y = _verticalVelocity;
+    
+        // This ensures the animation speed matches the movement speed
+        StateMachine.SetMoveSpeed(_currentSpeed);
+    
         StateMachine.MoveCharacter(movement);
     }
 
@@ -52,9 +57,15 @@ public class PlayerJumpingState : PlayerBaseState
     private void HandleMovement()
     {
         Vector3 inputDirection = StateMachine.CalculateMoveDirection();
-        
-        if (inputDirection.magnitude > PlayerInput.MovementInputThreshold)
+        float inputMagnitude = inputDirection.magnitude;
+
+        // Determine target speed and acceleration/deceleration rate
+        float targetSpeed;
+        float speedChange;
+
+        if (inputMagnitude > PlayerInput.MovementInputThreshold)
         {
+            // Update direction when we have meaningful input
             _moveDirection = inputDirection;
         
             // Update rotation if moving
@@ -65,29 +76,33 @@ public class PlayerJumpingState : PlayerBaseState
                 StateMachine.RotateCharacter(targetRotation, StateMachine.airRotationSpeed, _currentSpeed > 0.1f ? 1.5f : 1f);
             }
 
-            // If current speed is higher than air move speed, decelerate to it
-            // Otherwise accelerate to air move speed
-            float targetSpeed = StateMachine.airMoveSpeed;
-            float speedChange = _currentSpeed > targetSpeed ? 
-                StateMachine.airFriction : 
-                StateMachine.airAcceleration;
-
-            _currentSpeed = Mathf.MoveTowards(
-                _currentSpeed,
-                targetSpeed,
-                speedChange * Time.deltaTime
-            );
+            // Set target speed to air move speed
+            targetSpeed = StateMachine.airMoveSpeed;
         }
         else
         {
-            // No input - decelerate to 0
-            _currentSpeed = Mathf.MoveTowards(
-                _currentSpeed,
-                0f,
-                StateMachine.airFriction * Time.deltaTime
-            );
+            // No input - keep last valid direction but target zero speed
+            targetSpeed = 0f;
         }
-        
+    
+        // Determine acceleration/deceleration rate
+        speedChange = _currentSpeed > targetSpeed ? 
+            StateMachine.airFriction : 
+            StateMachine.airAcceleration;
+
+        // Update speed
+        _currentSpeed = Mathf.MoveTowards(
+            _currentSpeed,
+            targetSpeed,
+            speedChange * Time.deltaTime
+        );
+    
+        // Only reset move direction when completely stopped
+        if (_currentSpeed <= 0.01f)
+        {
+            _moveDirection = Vector3.zero;
+        }
+    
         StateMachine.SetMoveSpeed(_currentSpeed);
     }
 

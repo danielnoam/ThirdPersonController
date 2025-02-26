@@ -8,12 +8,14 @@ public class PlayerInput : MonoBehaviour
     public bool JumpInput { get; private set; }
     public bool SprintInput { get; private set; }
     public bool WalkInput { get; private set; }
-    public bool MoveSpeedToggleInput { get; private set; }
+    public bool MoveSpeedInput { get; private set; }
     public bool PlayerInteractInput { get; private set; }
     public bool RobotInteractInput { get; private set; }
     
     // Buffer settings
-    [Header("Input Buffer Settings")]
+    [Header("Settings")] 
+    [SerializeField] private bool toggleMoveSpeedInput = true;
+    [SerializeField] private bool toggleSprintInput = false;
     [SerializeField] private float jumpBufferTime = 0.2f;
     [SerializeField] private float interactBufferTime = 0.15f;
     
@@ -65,9 +67,26 @@ public class PlayerInput : MonoBehaviour
         }
         
         // Update other inputs
-        SprintInput = Input.GetButton("Sprint");
         WalkInput = Input.GetButton("Walk");
-        MoveSpeedToggleInput = Input.GetKeyDown(KeyCode.CapsLock);
+        
+        if (toggleSprintInput)
+        {
+            if (Input.GetButton("Sprint")) {
+                SprintInput = !SprintInput;
+            }
+        } else {
+            SprintInput = Input.GetButton("Sprint");
+        }
+
+        if (toggleMoveSpeedInput)
+        {
+            if (Input.GetKeyDown(KeyCode.CapsLock)) {
+                MoveSpeedInput = !MoveSpeedInput;
+            }
+        } else {
+            MoveSpeedInput = Input.GetKeyDown(KeyCode.CapsLock);
+        }
+
         
         // Set buffered inputs
         JumpInput = _jumpBufferCounter > 0;

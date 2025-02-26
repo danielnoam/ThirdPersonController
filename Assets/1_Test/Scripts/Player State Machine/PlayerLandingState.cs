@@ -45,37 +45,45 @@ public class PlayerLandingState : PlayerBaseState
 
     public override void FixedUpdateState()
     {
+        // Create movement vector using the calculated speed and direction
         Vector3 movement = _moveDirection * _currentSpeed;
         movement.y = StateMachine.groundedGravity;
+    
+        // This ensures the animation speed matches the movement speed
+        StateMachine.SetMoveSpeed(_currentSpeed);
+    
         StateMachine.MoveCharacter(movement);
     }
 
     private void HandleMovement()
     {
         Vector3 inputDirection = StateMachine.CalculateMoveDirection();
-        
-        if (inputDirection.magnitude > PlayerInput.MovementInputThreshold)
+        float inputMagnitude = inputDirection.magnitude;
+    
+        // Calculate movement control based on landing intensity and recovery progress
+        float movementControl = Mathf.Lerp(
+            StateMachine.minMovementControl,
+            1f,
+            _recoveryProgress
+        );
+    
+        // Only update direction if we have meaningful input
+        if (inputMagnitude > PlayerInput.MovementInputThreshold)
         {
             _moveDirection = inputDirection;
-        
-            // Calculate movement control based on landing intensity and recovery progress
-            float movementControl = Mathf.Lerp(
-                StateMachine.minMovementControl,
-                1f,
-                _recoveryProgress
-            );
         
             // Update rotation if moving
             if (_moveDirection.sqrMagnitude > PlayerInput.RotationInputThreshold)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(_moveDirection);
                 // Use movement control as multiplier to limit rotation during recovery
-                StateMachine.RotateCharacter(targetRotation, StateMachine.rotationSpeed, movementControl * (_currentSpeed > 0.1f ? 1.5f : 1f));
+                StateMachine.RotateCharacter(targetRotation, StateMachine.rotationSpeed, 
+                    movementControl * (_currentSpeed > 0.1f ? 1.5f : 1f));
             }
 
             // Calculate target speed with movement restriction
-            float targetSpeed = StateMachine.CalculateTargetSpeed(inputDirection.magnitude) * movementControl;
-            
+            float targetSpeed = StateMachine.CalculateTargetSpeed(inputMagnitude) * movementControl;
+    
             _currentSpeed = Mathf.MoveTowards(
                 _currentSpeed,
                 targetSpeed,
@@ -84,17 +92,22 @@ public class PlayerLandingState : PlayerBaseState
         }
         else
         {
-            // No input - decelerate to 0
+            // No input - keep last direction but decelerate to 0
             _currentSpeed = Mathf.MoveTowards(
                 _currentSpeed,
                 0f,
-                StateMachine.acceleration * Time.deltaTime
+                StateMachine.acceleration * movementControl * Time.deltaTime
             );
         }
-        
+
+        // Only reset move direction when completely stopped
+        if (_currentSpeed <= 0.01f)
+        {
+            _moveDirection = Vector3.zero;
+        }
+    
         StateMachine.SetMoveSpeed(_currentSpeed);
     }
-
     private void CheckStateTransitions()
     {
         // Transition to grounded state when recovered

@@ -13,7 +13,7 @@ public class PlayerInteractingState : PlayerBaseState
     
     public override void EnterState()
     {
-        StateMachine.SetMoveSpeed(0f);
+        _currentSpeed = StateMachine.activeMoveSpeed;
     }
     
     public override void ExitState()
@@ -23,14 +23,28 @@ public class PlayerInteractingState : PlayerBaseState
 
     public override void UpdateState()
     {
+        // Gradually reduce speed to 0
+        _currentSpeed = Mathf.MoveTowards(_currentSpeed, 0f, StateMachine.acceleration * 2f * Time.deltaTime);
+
+        // Only reset move direction when completely stopped
+        if (_currentSpeed <= 0.01f)
+        {
+            _moveDirection = Vector3.zero;
+        }
+
+        // Update state machine's speed for animations
+        StateMachine.SetMoveSpeed(_currentSpeed);
+
         CheckStateTransitions();
     }
 
+
     public override void FixedUpdateState()
     {
+        // Create movement vector using the calculated speed and direction
         Vector3 movement = _moveDirection * _currentSpeed;
-        // Apply constant downward force while grounded to stick to slopes
         movement.y = StateMachine.groundedGravity;
+
         StateMachine.MoveCharacter(movement);
     }
     

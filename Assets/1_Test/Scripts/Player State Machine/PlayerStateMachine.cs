@@ -167,7 +167,6 @@ public class PlayerStateMachine : MonoBehaviour
         if (interactable)
         {
             currentInteractable = interactable;
-            currentInteractable.SetHighlight(true);
         }
     }
 
@@ -175,10 +174,10 @@ public class PlayerStateMachine : MonoBehaviour
     {
         other.TryGetComponent(out MultiStateInteractable interactable);
         
-        if (interactable == currentInteractable)
+        if (interactable && interactable == currentInteractable)
         {
             // Allow player interaction
-            CanInteract = currentInteractable.PlayerCanInteract();
+            CanInteract = currentInteractable.PlayerCanInteract() && CurrentState == GroundedState;
             
             // Allow robot interaction
             if (robot && currentInteractable.RobotCanInteract() && input.RobotInteractInput)
@@ -197,7 +196,7 @@ public class PlayerStateMachine : MonoBehaviour
     private void OnTriggerExit(Collider other)
     {
         other.TryGetComponent(out MultiStateInteractable interactable);
-        if (interactable == currentInteractable)
+        if (interactable && interactable == currentInteractable)
         {
             currentInteractable.SetHighlight(false);
             currentInteractable = null;
@@ -250,6 +249,8 @@ public class PlayerStateMachine : MonoBehaviour
 
     public void MoveCharacter(Vector3 movement)
     {
+        // Simply apply the movement as provided by the state
+        // Each state is responsible for updating activeMoveSpeed for animations
         controller.Move(movement * Time.fixedDeltaTime);
     }
 
@@ -284,7 +285,7 @@ public class PlayerStateMachine : MonoBehaviour
 
     public float CalculateTargetSpeed(float movementIntensity)
     {
-        LockSprinting = input.MoveSpeedToggleInput;
+        LockSprinting = input.MoveSpeedInput;
         if (movementIntensity < PlayerInput.MovementInputThreshold)
             return 0f;
 

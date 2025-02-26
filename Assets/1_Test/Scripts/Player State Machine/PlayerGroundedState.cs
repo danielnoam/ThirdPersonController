@@ -23,29 +23,28 @@ public class PlayerGroundedState : PlayerBaseState
 
     public override void UpdateState()
     {
-        HandleMovementAndRotation();
+        HandleMovement();
         CheckStateTransitions();
     }
 
     public override void FixedUpdateState()
     {
+        // Create movement vector using the calculated speed and direction
         Vector3 movement = _moveDirection * _currentSpeed;
-        // Apply constant downward force while grounded to stick to slopes
         movement.y = StateMachine.groundedGravity;
+    
+        // This ensures the animation speed matches the movement speed
+        StateMachine.SetMoveSpeed(_currentSpeed);
+    
         StateMachine.MoveCharacter(movement);
     }
     
-    private void HandleMovementAndRotation()
+    private void HandleMovement()
     {
         // Get camera-relative movement direction
-        _moveDirection = StateMachine.CalculateMoveDirection();
+        Vector3 inputDirection = StateMachine.CalculateMoveDirection();
+        float inputMagnitude = inputDirection.magnitude;
     
-        // Update rotation if moving
-        if (_moveDirection.sqrMagnitude > PlayerInput.RotationInputThreshold)
-        {
-            _targetRotation = Quaternion.LookRotation(_moveDirection);
-        }
-        
         // Calculate movement intensity (0-1)
         float movementIntensity = Mathf.Clamp01(
             Mathf.Abs(StateMachine.input.MovementInput.x) + 
@@ -54,17 +53,40 @@ public class PlayerGroundedState : PlayerBaseState
 
         // Get target speed
         float targetSpeed = StateMachine.CalculateTargetSpeed(movementIntensity);
+    
+        // Only update direction if we have meaningful input
+        if (inputMagnitude > PlayerInput.MovementInputThreshold)
+        {
+            _moveDirection = inputDirection;
         
+            // Update rotation if moving
+            if (_moveDirection.sqrMagnitude > PlayerInput.RotationInputThreshold)
+            {
+                _targetRotation = Quaternion.LookRotation(_moveDirection);
+            }
+        }
+        else
+        {
+            // No input - keep last direction but set target speed to 0
+            targetSpeed = 0f;
+        }
+    
         // Update current speed with acceleration
         _currentSpeed = Mathf.MoveTowards(
             _currentSpeed, 
             targetSpeed, 
             StateMachine.acceleration * Time.deltaTime
         );
-        
+    
+        // Only reset move direction when completely stopped
+        if (_currentSpeed <= 0.01f)
+        {
+            _moveDirection = Vector3.zero;
+        }
+    
         // Apply rotation - faster rotation when moving, slower when stopping
         StateMachine.RotateCharacter(_targetRotation, StateMachine.rotationSpeed, _currentSpeed > 0.1f ? 2f : 1f);
-        
+    
         // Update state machine's speed for animations
         StateMachine.SetMoveSpeed(_currentSpeed);
     }
