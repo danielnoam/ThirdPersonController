@@ -2,7 +2,21 @@ using UnityEngine;
 
 public class PlayerInput : MonoBehaviour
 {
-    // Inputs
+
+    
+    [Header("Settings")] 
+    [SerializeField] private bool toggleMoveSpeedInput = true;
+    [SerializeField] private bool toggleSprintInput = false;
+    [SerializeField] private bool toggleAimInput = false;
+    [SerializeField, Min(0f)] private float jumpBufferTime = 0.2f;
+    [SerializeField, Min(0f)] private float interactBufferTime = 0.15f;
+    [SerializeField, Range(0.1f, 2f)] private float mouseSensitivity = 1f;
+    [SerializeField, Range(0.1f, 2f)] private float freeCameraSensitivity = 1f;
+    [SerializeField, Range(0.1f, 2f)] private float aimCameraSensitivity = 1f;
+    public const float RotationInputThreshold = 0.01f;
+    public const float SprintInputThreshold = 0.5f;
+    public const float MovementInputThreshold = 0.1f;
+    
     public Vector2 MovementInput { get; private set; }
     public Vector2 MouseDelta { get; private set; }
     public bool JumpInput { get; private set; }
@@ -12,26 +26,16 @@ public class PlayerInput : MonoBehaviour
     public bool PlayerInteractInput { get; private set; }
     public bool RobotInteractInput { get; private set; }
     public bool AimInput { get; private set; }
+    public float MouseSensitivity => mouseSensitivity;
+    public float AimCameraSensitivity => aimCameraSensitivity;
+    public float FreeCameraSensitivity => freeCameraSensitivity;
     
-    // Buffer settings
-    [Header("Settings")] 
-    [SerializeField] private bool toggleMoveSpeedInput = true;
-    [SerializeField] private bool toggleSprintInput = false;
-    [SerializeField] private float jumpBufferTime = 0.2f;
-    [SerializeField] private float interactBufferTime = 0.15f;
     
     // Buffer timers
     private float _jumpBufferCounter;
     private float _playerInteractBufferCounter;
     private float _robotInteractBufferCounter;
-    
-    // Constants
-    public const float RotationInputThreshold = 0.01f;
-    public const float SprintInputThreshold = 0.5f;
-    public const float MovementInputThreshold = 0.1f;
-    public const float MouseSensitivity = 1f;
-    public const float FreeCameraSensitivity = 1f;
-    public const float OverShoulderCameraSensitivity = 1f;
+
     
     private void Update()
     {
@@ -51,7 +55,15 @@ public class PlayerInput : MonoBehaviour
             Input.GetAxis("Mouse Y")
         );
         
-        AimInput = Input.GetMouseButton(1);
+        if (toggleAimInput)
+        {
+            if (Input.GetMouseButton(1)) {
+                AimInput = !AimInput;
+            }
+        } else {
+            AimInput = Input.GetMouseButton(1);
+        }
+        
         
         if (Input.GetButtonDown("Jump"))
         {

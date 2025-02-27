@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6232357240667778510}
   m_Layer: 6
-  m_Name: RobotTarget1
+  m_Name: RobotTargetTopOfHead
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -31,37 +31,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 5159062420402600487}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &5058799859200096221
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 7396438939317255740}
-  m_Layer: 0
-  m_Name: AimCore
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &7396438939317255740
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5058799859200096221}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 5159062420402600487}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5929691532129443097
 GameObject:
   m_ObjectHideFlags: 0
@@ -75,6 +44,7 @@ GameObject:
   - component: {fileID: 6423507642453185515}
   - component: {fileID: 4944199171973541159}
   - component: {fileID: 5104919376805049993}
+  - component: {fileID: 4320568683722358497}
   - component: {fileID: 7928860610601458710}
   m_Layer: 6
   m_Name: Player
@@ -97,7 +67,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2381188618167646215}
-  - {fileID: 7396438939317255740}
   - {fileID: 6232357240667778510}
   - {fileID: 6884127725147339731}
   m_Father: {fileID: 0}
@@ -180,8 +149,30 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   toggleMoveSpeedInput: 1
   toggleSprintInput: 0
+  toggleAimInput: 0
   jumpBufferTime: 0.2
   interactBufferTime: 0.15
+  mouseSensitivity: 1
+  freeCameraSensitivity: 1
+  aimCameraSensitivity: 1
+--- !u!114 &4320568683722358497
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5929691532129443097}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 719a9bc8b10c0434587008f17fec18f9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  verticalSmoothTime: 0.1
+  horizontalSmoothTime: 0.15
+  walkBlendMax: 0.5
+  runBlendMax: 1
+  sprintBlendMax: 2
+  maxFallTime: 2
 --- !u!114 &7928860610601458710
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -199,13 +190,12 @@ MonoBehaviour:
   sprintSpeed: 12
   acceleration: 10
   rotationSpeed: 2
+  aimRotationSpeed: 4
   airMoveSpeed: 4
   airRotationSpeed: 1
   airAcceleration: 3
   airFriction: 2
   jumpForce: 8
-  jumpSpeedBoost: 2
-  coyoteJumpTime: 0.3
   gravity: -15
   groundedGravity: -5
   maxVerticalVelocity: -50
@@ -218,9 +208,8 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 1
-  freeLookCamera: {fileID: 0}
-  controller: {fileID: 6423507642453185515}
-  animator: {fileID: 9158748059929275770}
+  robot: {fileID: 0}
+  cameraManager: {fileID: 0}
   debugText: {fileID: 0}
 --- !u!1 &6222182585895994483
 GameObject:
@@ -232,7 +221,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6884127725147339731}
   m_Layer: 6
-  m_Name: RobotTarget2
+  m_Name: RobotTargetOverShoulder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

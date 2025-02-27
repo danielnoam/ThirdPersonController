@@ -1,9 +1,5 @@
-using System;
 using TMPro;
 using UnityEngine;
-using Unity.Cinemachine;
-using UnityEngine.Serialization;
-
 
 public enum PlayerAnimationState
 {
@@ -14,10 +10,8 @@ public enum PlayerAnimationState
     Interact = 4,
 }
 
-
 [RequireComponent(typeof(PlayerInput))]
 [RequireComponent(typeof(CharacterController))]
-[RequireComponent(typeof(Animator))]
 public class PlayerStateMachine : MonoBehaviour
 {
     public PlayerBaseState CurrentState { get; private set; }
@@ -81,89 +75,59 @@ public class PlayerStateMachine : MonoBehaviour
     [Tooltip("Layer mask defining what objects count as ground")]
     [SerializeField] private LayerMask groundLayer = 1;
 
-    
-    [Header("References")]
-    [Tooltip("Priority of the freelook camera (normal camera)")]
-    public int freelookCameraPriority = 10;
-    [Tooltip("Priority of the aim camera")]
-    public int aimCameraPriority = 15;
-    [SerializeField] private CinemachineCamera freeLookCamera;
-    [SerializeField] private CinemachineCamera aimCamera;
-    [SerializeField] private CharacterController controller;
-    [SerializeField] private Animator animator;
+    [Header("References")] 
+    [SerializeField] private RobotCompanion robot;
+    [SerializeField] private CameraManager cameraManager;
     [SerializeField] private TextMeshProUGUI debugText;
     
     
-
-    public PlayerInput input { get; private set; }
-    public MultiStateInteractable currentInteractable { get;  set; }
-    public RobotCompanion robot { get;  set; }
-    public float AirTime { get; private set; }
-
-    public float FallTime { get; private set; }
-
-    public float LandingIntensity { get; private set; }
-    public float activeMoveSpeed { get; private set; }
-    public float activeVerticalVelocity { get; private set; }
-    public Vector3 activeMoveDirection { get; private set; }
+    public float AirTime { get;  set; }
+    public float FallTime { get;  set; }
+    public float LandingIntensity { get; set; }
+    public float activeHorizontalVelocity { get; set; }
+    public float activeVerticalVelocity { get; set; }
+    public Vector3 activeMoveDirection { get; set; } = Vector3.zero;
     public bool IsGrounded { get; private set; }
     public bool CanInteract { get; private set; }
-    public bool LockSprinting { get; private set; }
-    public bool IsAiming => _isAiming;
-    private bool _isAiming = false;
-    private float _timeEnteredAimMode = 0f;
-    private Vector3 _lastAimDirection = Vector3.forward;
-    
-
-    
-    // Animation hashes
-    private readonly int _stateHash = Animator.StringToHash("StateIndex");
-    private readonly int _verticalHash = Animator.StringToHash("Vertical");
-    private readonly int _horizontalHash = Animator.StringToHash("Horizontal");
-    private readonly int _fallTimeHash = Animator.StringToHash("FallTime");
-    private readonly int _isAimingHash = Animator.StringToHash("IsAiming");
-    
-
+    public bool IsAiming { get; private set; }
+    public PlayerInput input { get; private set; }
+    public MultiStateInteractable currentInteractable { get; private set; }
+    private CharacterController _controller;
+    private bool _lockSprinting;
+    private Vector3 _lastRotationDirection = Vector3.forward;
 
     private void Awake()
     {
-        if (!controller) controller = GetComponent<CharacterController>();
-        if (!animator) animator = GetComponent<Animator>();
+        _controller = GetComponent<CharacterController>();
         input = GetComponent<PlayerInput>();
-
-        // Initialize states
         GroundedState = new PlayerGroundedState(this);
         JumpingState = new PlayerJumpingState(this);
         FallingState = new PlayerFallingState(this);
         LandingState = new PlayerLandingState(this);
         InteractingState = new PlayerInteractingState(this);
         
-        if (freeLookCamera == null) Debug.LogError("Cinemachine cameras not assigned!");
-
-        // Set camera priorities
-        freeLookCamera.Priority = 15;
-
-        // Initialize movement properties
-        activeMoveSpeed = 0f;
-        activeVerticalVelocity = 0f;
-        activeMoveDirection = Vector3.zero;
-
-        // Set initial state
         SwitchState(GroundedState);
     }
 
     private void Start()
     {
-        robot = FindFirstObjectByType<RobotCompanion>();
+        if (!robot) robot = FindFirstObjectByType<RobotCompanion>();
+        if (!cameraManager) cameraManager = FindFirstObjectByType<CameraManager>();
+        cameraManager.Initialize(input);
     }
 
     private void Update()
     {
+        if (cameraManager)
+        {
+            cameraManager.UpdateCameraPosition(transform.position);
+            cameraManager.HandleCameraRotation();
+        }
+        
         CheckGrounded();
         UpdateFallTime();
-        UpdateAimState();
+        HandleCameraInputs();
         CurrentState.UpdateState();
-        SyncAnimations();
         UpdateDebugText();
     }
 
@@ -217,8 +181,6 @@ public class PlayerStateMachine : MonoBehaviour
         }
     }
     
-
-
     #region State Control ---------------------------------------------------------------
 
     public void SwitchState(PlayerBaseState newState)
@@ -226,8 +188,6 @@ public class PlayerStateMachine : MonoBehaviour
         CurrentState?.ExitState();
         CurrentState = newState;
         CurrentState.EnterState();
-        
-        Debug.Log($"Switched to {newState.GetType().Name}");
     }
     
     public void OnInteractionComplete(MultiStateInteractable interactable)
@@ -237,83 +197,102 @@ public class PlayerStateMachine : MonoBehaviour
 
     #endregion State Control ---------------------------------------------------------------
 
-
-
-
     #region Aiming ---------------------------------------------------------------
-
     
-    private void UpdateAimState()
+    private void HandleCameraInputs()
     {
         // Toggle aim mode based on input
         if (input.AimInput)
         {
-            if (!_isAiming)
+            if (!IsAiming)
             {
-                _isAiming = true;
-                _timeEnteredAimMode = Time.time;
+                IsAiming = true;
+                
+                // When first entering aim mode, immediately align character with camera
+                Vector3 initialAimDirection = GetCameraAimDirection();
+                Quaternion targetRotation = Quaternion.LookRotation(initialAimDirection);
+                transform.rotation = targetRotation;
+                _lastRotationDirection = initialAimDirection;
             
-                // Set camera priorities to switch to aim camera
-                if (aimCamera != null && freeLookCamera != null)
-                {
-                    aimCamera.Priority = aimCameraPriority;
-                    freeLookCamera.Priority = freelookCameraPriority;
-                }
+                // Switch to aim camera
+                cameraManager.SwitchToAimCamera();
             }
         }
-        else if (_isAiming)
+        else if (IsAiming)
         {
-            _isAiming = false;
-        
-            // Reset camera priorities
-            if (aimCamera != null && freeLookCamera != null)
-            {
-                freeLookCamera.Priority = aimCameraPriority;
-                aimCamera.Priority = freelookCameraPriority;
-            }
+            IsAiming = false;
+            
+            // Switch to free look camera
+            cameraManager.SwitchToFreeLookCamera();
         }
     }
     
     public Vector3 GetCameraAimDirection()
     {
-        if (freeLookCamera == null)
-            return transform.forward;
-        
-        Vector3 cameraForward = freeLookCamera.transform.forward;
-        cameraForward.y = 0;
-    
-        if (cameraForward.sqrMagnitude < 0.001f)
-            return _lastAimDirection;
-        
-        cameraForward.Normalize();
-        _lastAimDirection = cameraForward;
-        return cameraForward;
+        if (!cameraManager) return transform.forward;
+        return cameraManager.GetCameraAimDirection();
     }
+    
     public void HandleAimRotation()
     {
-        if (!_isAiming)
+        if (!IsAiming)
             return;
         
+        // Get the current aim direction
         Vector3 aimDirection = GetCameraAimDirection();
-        Quaternion targetRotation = Quaternion.LookRotation(aimDirection);
-    
-        // Rotate player to face aim direction
-        RotateCharacter(
-            targetRotation,
-            aimRotationSpeed,
-            1.0f
-        );
+        
+        // Calculate the angle difference between current aim direction and last rotation direction
+        float angleChange = Vector3.Angle(_lastRotationDirection, aimDirection);
+        
+        // Check if mouse movement exceeds our threshold
+        if (input.MouseDelta.magnitude > cameraManager.AimRotationThreshold || angleChange > 1.0f)
+        {
+            // There's significant mouse movement, so update the character rotation
+            Quaternion targetRotation = Quaternion.LookRotation(aimDirection);
+            
+            // Rotate player to face aim direction
+            RotateCharacter(
+                targetRotation,
+                aimRotationSpeed,
+                1.0f
+            );
+            
+            // Store this as the last direction we rotated to
+            _lastRotationDirection = aimDirection;
+        }
     }
     
-
     #endregion Aiming ---------------------------------------------------------------
-    
-    
     
     #region Movement ---------------------------------------------------------------
     
+    private void MoveCharacter()
+    {
+        // Create movement vector using the active properties
+        Vector3 movement = Vector3.zero;
+    
+        // Only apply horizontal movement if we have both direction and speed
+        if (activeMoveDirection.sqrMagnitude > 0.001f && activeHorizontalVelocity > 0.01f)
+        {
+            movement = activeMoveDirection * activeHorizontalVelocity;
+        }
+    
+        // Always apply vertical movement
+        movement.y = activeVerticalVelocity;
+    
+        // Apply movement
+        _controller.Move(movement * Time.fixedDeltaTime);
+    }
 
-
+    public void RotateCharacter(Quaternion targetRotation, float baseSpeed, float multiplier = 1f)
+    {
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation,
+            targetRotation,
+            baseSpeed * multiplier * Time.fixedDeltaTime * 100f
+        );
+    }
+    
     private void CheckGrounded()
     {
         Vector3 spherePosition = transform.position + groundCheckOffset;
@@ -322,77 +301,11 @@ public class PlayerStateMachine : MonoBehaviour
     
     private void UpdateFallTime()
     {
-        // Reset fall time when grounded
-        if (IsGrounded && FallTime > 0)
-        {
-            SetFallTime(0);
-            return;
-        }
-
         // Only increment fall time when moving downward
         if (!IsGrounded && CurrentState != JumpingState)
         {
-            SetFallTime(FallTime + Time.deltaTime);
+            FallTime += Time.deltaTime;
         }
-    }
-
-
-    private void MoveCharacter()
-    {
-        // Create movement vector using the active properties
-        Vector3 movement = Vector3.zero;
-    
-        // Only apply horizontal movement if we have both direction and speed
-        if (activeMoveDirection.sqrMagnitude > 0.001f && activeMoveSpeed > 0.01f)
-        {
-            movement = activeMoveDirection * activeMoveSpeed;
-        }
-    
-        // Always apply vertical movement
-        movement.y = activeVerticalVelocity;
-    
-        // Apply movement
-        controller.Move(movement * Time.fixedDeltaTime);
-    }
-
-    public void RotateCharacter(Quaternion targetRotation, float baseSpeed, float multiplier = 1f)
-    {
-        transform.rotation = Quaternion.RotateTowards(
-            transform.rotation,
-            targetRotation,
-            baseSpeed * multiplier * Time.deltaTime * 100f
-        );
-    }
-    
-
-    public void SetMoveSpeed(float speed)
-    {
-        activeMoveSpeed = speed;
-    }
-    
-    public void SetMoveDirection(Vector3 direction)
-    {
-        activeMoveDirection = direction;
-    }
-    
-    public void SetVerticalVelocity(float velocity)
-    {
-        activeVerticalVelocity = velocity;
-    }
-    
-    public void SetAirTime(float time)
-    {
-        AirTime = time;
-    }
-    
-    public void SetFallTime(float time)
-    {
-        FallTime = time;
-    }
-    
-    public void SetLandingIntensity(float intensity)
-    {
-        LandingIntensity = intensity;
     }
     
     public float CalculateGravityVelocity(float currentVelocity, float deltaTime)
@@ -408,13 +321,12 @@ public class PlayerStateMachine : MonoBehaviour
 
     public float CalculateTargetSpeed(float movementIntensity)
     {
-        
-        LockSprinting = input.MoveSpeedInput || _isAiming;
+        _lockSprinting = input.MoveSpeedInput || IsAiming;
     
         if (movementIntensity < PlayerInput.MovementInputThreshold)
             return 0f;
 
-        if (!LockSprinting)
+        if (!_lockSprinting)
         {
             if (input.WalkInput)
                 return walkSpeed;
@@ -436,81 +348,12 @@ public class PlayerStateMachine : MonoBehaviour
     
     public Vector3 CalculateMoveDirection()
     {
-        // Get camera forward and right
-        var forward = freeLookCamera.transform.forward;
-        var right = freeLookCamera.transform.right;
-    
-        // Project onto horizontal plane
-        forward.y = 0;
-        right.y = 0;
-        forward.Normalize();
-        right.Normalize();
-
-        // Calculate movement direction relative to camera
-        return (forward * input.MovementInput.y + 
-                right * input.MovementInput.x).normalized;
+        if (!cameraManager) return transform.forward;
+        return cameraManager.CalculateMoveDirection(input.MovementInput);
     }
-    
     
     #endregion Movement ---------------------------------------------------------------
 
-    
-    #region Animations ---------------------------------------------------------------
-
-    private void SyncAnimations()
-    {
-    
-        // Set current state
-        PlayerAnimationState currentAnimState = CurrentState switch
-        {
-            PlayerGroundedState => PlayerAnimationState.Grounded,
-            PlayerJumpingState => PlayerAnimationState.Jump,
-            PlayerFallingState => PlayerAnimationState.Fall,
-            PlayerLandingState => PlayerAnimationState.Landing,
-            PlayerInteractingState => PlayerAnimationState.Interact,
-            _ => PlayerAnimationState.Grounded
-        };
-        animator.SetInteger(_stateHash, (int)currentAnimState);
-
-        // Handle fall/landing blend
-        float fallBlend = CurrentState is PlayerLandingState ? LandingIntensity : Mathf.Clamp01(FallTime / maxFallTime);
-        animator.SetFloat(_fallTimeHash, fallBlend);
-
-        // Set aiming parameter
-        animator.SetBool(_isAimingHash, _isAiming);
-        
-        UpdateMovementAnimation();
-    }
-
-    private void UpdateMovementAnimation()
-    {
-        float verticalValue = CalculateSpeedBlend();
-        animator.SetFloat(_verticalHash, verticalValue, 0.1f, Time.deltaTime);
-        animator.SetFloat(_horizontalHash, 0, 0.1f, Time.deltaTime);
-    }
-    
-    private float CalculateSpeedBlend()
-    {
-        if (activeMoveSpeed <= walkSpeed)
-        {
-            return (activeMoveSpeed / walkSpeed) * 0.5f;
-        }
-        
-        if (activeMoveSpeed <= runSpeed)
-        {
-            return 0.5f + ((activeMoveSpeed - walkSpeed) / (runSpeed - walkSpeed)) * 0.5f;
-        }
-        
-        if (activeMoveSpeed <= sprintSpeed) 
-        {
-            return 1f + (activeMoveSpeed - runSpeed) / (sprintSpeed - runSpeed);
-        }
-
-        return 0f;
-    }
-
-    #endregion Animations ---------------------------------------------------------------
-    
     
     #region Utility ---------------------------------------------------------------
 
@@ -520,12 +363,13 @@ public class PlayerStateMachine : MonoBehaviour
 
         debugText.text = $"State: {CurrentState.GetType().Name}\n" +
                          $"IsGrounded: {IsGrounded}\n" +
-                         $"IsAiming: {_isAiming}\n" +
+                         $"IsAiming: {IsAiming}\n" +
                          $"AirTime: {AirTime}\n" +
                          $"FallTime: {FallTime}\n" +
                          $"LandingIntensity: {LandingIntensity}\n" +
                          $"MoveDirection: {activeMoveDirection}\n" +
-                         $"ActiveMoveSpeed: {activeMoveSpeed}\n" +
+                         $"ActiveMoveSpeed: {activeHorizontalVelocity}\n" +
+                         $"MouseDelta: {input.MouseDelta.magnitude}\n" +
                          $"ActiveVerticalVelocity: {activeVerticalVelocity}\n";
     }
     
@@ -544,12 +388,9 @@ public class PlayerStateMachine : MonoBehaviour
             Gizmos.color = Color.red;
         }
 
-        
         Vector3 spherePosition = transform.position + groundCheckOffset;
         Gizmos.DrawWireSphere(spherePosition, groundCheckRadius);
     }
 
     #endregion Utility ---------------------------------------------------------------
-    
-    
 }

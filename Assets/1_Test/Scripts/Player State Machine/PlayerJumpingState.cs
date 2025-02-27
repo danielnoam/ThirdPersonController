@@ -7,8 +7,8 @@ public class PlayerJumpingState : PlayerBaseState
     public override void EnterState()
     {
         StateMachine.input.ConsumeJumpBuffer();
-        StateMachine.SetVerticalVelocity(StateMachine.jumpForce);
-        StateMachine.SetAirTime(0);
+        StateMachine.activeVerticalVelocity = StateMachine.jumpForce;
+        StateMachine.AirTime = 0f;
     }
     
     public override void ExitState()
@@ -18,7 +18,7 @@ public class PlayerJumpingState : PlayerBaseState
 
     public override void UpdateState()
     {
-        StateMachine.SetAirTime(StateMachine.AirTime + Time.deltaTime);
+        StateMachine.AirTime += Time.deltaTime;
         CheckStateTransitions();
     }
 
@@ -27,7 +27,7 @@ public class PlayerJumpingState : PlayerBaseState
         HandleMovement();
         HandleGravity();
         
-        // New: Handle aim rotation if aiming
+        // Handle aim rotation if aiming - this now uses the improved rotation logic
         StateMachine.HandleAimRotation();
     }
 
@@ -40,7 +40,7 @@ public class PlayerJumpingState : PlayerBaseState
         );
     
         // Update the state machine's vertical velocity
-        StateMachine.SetVerticalVelocity(newVerticalVelocity);
+        StateMachine.activeVerticalVelocity = newVerticalVelocity;
     }
 
     private void HandleMovement()
@@ -75,17 +75,13 @@ public class PlayerJumpingState : PlayerBaseState
         if (inputMagnitude > PlayerInput.MovementInputThreshold)
         {
             // When we have input, update the direction
-            StateMachine.SetMoveDirection(inputDirection);
+            StateMachine.activeMoveDirection = inputDirection;
         
             // Update rotation based on aim state
             if (StateMachine.IsAiming)
             {
-                // Always face camera direction when aiming
-                StateMachine.RotateCharacter(
-                    targetRotation, 
-                    StateMachine.aimRotationSpeed, 
-                    1.0f
-                );
+                // Aim rotation is now handled in HandleAimRotation
+                // No need to rotate character here
             } 
             else if (inputDirection.sqrMagnitude > PlayerInput.RotationInputThreshold)
             {
@@ -93,7 +89,7 @@ public class PlayerJumpingState : PlayerBaseState
                 StateMachine.RotateCharacter(
                     targetRotation, 
                     StateMachine.airRotationSpeed, 
-                    StateMachine.activeMoveSpeed > 0.1f ? 1.5f : 1f
+                    StateMachine.activeHorizontalVelocity > 0.1f ? 1.5f : 1f
                 );
             }
 
@@ -104,37 +100,26 @@ public class PlayerJumpingState : PlayerBaseState
         {
             // No input - keep current direction but target zero speed
             targetSpeed = 0f;
-            
-            // Still maintain aim rotation when aiming even without movement
-            if (StateMachine.IsAiming)
-            {
-                targetRotation = Quaternion.LookRotation(StateMachine.GetCameraAimDirection());
-                StateMachine.RotateCharacter(
-                    targetRotation, 
-                    StateMachine.aimRotationSpeed, 
-                    1.0f
-                );
-            }
         }
     
         // Determine acceleration/deceleration rate and update speed
-        float speedChange = StateMachine.activeMoveSpeed > targetSpeed ? 
+        float speedChange = StateMachine.activeHorizontalVelocity > targetSpeed ? 
             StateMachine.airFriction : 
             StateMachine.airAcceleration;
 
         // Update speed
         float newSpeed = Mathf.MoveTowards(
-            StateMachine.activeMoveSpeed,
+            StateMachine.activeHorizontalVelocity,
             targetSpeed,
             speedChange * Time.fixedDeltaTime
         );
         
-        StateMachine.SetMoveSpeed(newSpeed);
+        StateMachine.activeHorizontalVelocity = newSpeed;
         
         // Only reset move direction when completely stopped
         if (newSpeed <= 0.01f)
         {
-            StateMachine.SetMoveDirection(Vector3.zero);
+            StateMachine.activeMoveDirection = Vector3.zero;
         }
     }
 

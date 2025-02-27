@@ -26,10 +26,10 @@ public class PlayerGroundedState : PlayerBaseState
 
     public override void FixedUpdateState()
     {
-        StateMachine.SetVerticalVelocity(StateMachine.groundedGravity);
+        StateMachine.activeVerticalVelocity = StateMachine.groundedGravity;
         HandleMovement();
         
-        // New: Handle aim rotation if aiming
+        // Handle aim rotation if aiming - this now uses the improved rotation logic
         StateMachine.HandleAimRotation();
     }
     
@@ -79,7 +79,7 @@ public class PlayerGroundedState : PlayerBaseState
         // Only update direction if we have meaningful input
         if (inputMagnitude > PlayerInput.MovementInputThreshold)
         {
-            StateMachine.SetMoveDirection(inputDirection);
+            StateMachine.activeMoveDirection = inputDirection;
         }
         else
         {
@@ -89,25 +89,25 @@ public class PlayerGroundedState : PlayerBaseState
     
         // Update current speed with acceleration
         float newSpeed = Mathf.MoveTowards(
-            StateMachine.activeMoveSpeed, 
+            StateMachine.activeHorizontalVelocity, 
             targetSpeed, 
             StateMachine.acceleration * Time.fixedDeltaTime
         );
     
         // Update state machine's speed
-        StateMachine.SetMoveSpeed(newSpeed);
+        StateMachine.activeHorizontalVelocity = newSpeed;
         
         // Only reset move direction when completely stopped
         if (newSpeed <= 0.01f)
         {
-            StateMachine.SetMoveDirection(Vector3.zero);
+            StateMachine.activeMoveDirection = Vector3.zero;
         }
     
         // Apply rotation based on situation
         if (StateMachine.IsAiming)
         {
-            // When aiming, the rotation is always controlled by camera
-            StateMachine.RotateCharacter(_targetRotation, StateMachine.aimRotationSpeed, 1.0f);
+            // When aiming, rotation is handled by HandleAimRotation in the StateMachine
+            // We don't need to apply rotation here anymore
         }
         else
         {
