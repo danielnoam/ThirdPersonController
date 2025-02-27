@@ -1,4 +1,3 @@
-
 using System;
 using TMPro;
 using UnityEngine;
@@ -39,12 +38,14 @@ public class PlayerStateMachine : MonoBehaviour
     public float acceleration = 10f;
     [Tooltip("Base rotation speed when turning on the ground")]
     public float rotationSpeed = 2f;
+    [Tooltip("Rotation speed when turning while aiming")]
+    public float aimRotationSpeed = 4f;
 
     [Header("Air Movement")]
     [Tooltip("Maximum horizontal speed while in the air")]
     public float airMoveSpeed = 4f;
     [Tooltip("Base rotation speed when turning in the air")]
-    public float airRotationSpeed = 2f;
+    public float airRotationSpeed = 1f;
     [Tooltip("How quickly the character reaches target speed in air")]
     public float airAcceleration = 3f;
     [Tooltip("How quickly the character loses momentum in air")]
@@ -53,10 +54,6 @@ public class PlayerStateMachine : MonoBehaviour
     [Header("Jump")]
     [Tooltip("Initial upward velocity applied when jumping")]
     public float jumpForce = 8f;
-    [Tooltip("Additional move speed boost applied when running and jumping")]
-    public float jumpSpeedBoost = 2f;
-    [Tooltip("Maximum time the character can jump after leaving a ledge")]
-    public float coyoteJumpTime = 0.3f;
 
     [Header("Gravity")]
     [Tooltip("Downward acceleration applied while in the air")]
@@ -86,9 +83,13 @@ public class PlayerStateMachine : MonoBehaviour
 
     
     [Header("References")]
+    [Tooltip("Priority of the freelook camera (normal camera)")]
+    public int freelookCameraPriority = 10;
+    [Tooltip("Priority of the aim camera")]
+    public int aimCameraPriority = 15;
     [SerializeField] private CinemachineCamera freeLookCamera;
+    [SerializeField] private CinemachineCamera aimCamera;
     [SerializeField] private CharacterController controller;
-    
     [SerializeField] private Animator animator;
     [SerializeField] private TextMeshProUGUI debugText;
     
@@ -102,12 +103,16 @@ public class PlayerStateMachine : MonoBehaviour
     public float FallTime { get; private set; }
 
     public float LandingIntensity { get; private set; }
-
     public float activeMoveSpeed { get; private set; }
+    public float activeVerticalVelocity { get; private set; }
+    public Vector3 activeMoveDirection { get; private set; }
     public bool IsGrounded { get; private set; }
     public bool CanInteract { get; private set; }
     public bool LockSprinting { get; private set; }
-    
+    public bool IsAiming => _isAiming;
+    private bool _isAiming = false;
+    private float _timeEnteredAimMode = 0f;
+    private Vector3 _lastAimDirection = Vector3.forward;
     
 
     
@@ -116,6 +121,7 @@ public class PlayerStateMachine : MonoBehaviour
     private readonly int _verticalHash = Animator.StringToHash("Vertical");
     private readonly int _horizontalHash = Animator.StringToHash("Horizontal");
     private readonly int _fallTimeHash = Animator.StringToHash("FallTime");
+    private readonly int _isAimingHash = Animator.StringToHash("IsAiming");
     
 
 
@@ -137,6 +143,11 @@ public class PlayerStateMachine : MonoBehaviour
         // Set camera priorities
         freeLookCamera.Priority = 15;
 
+        // Initialize movement properties
+        activeMoveSpeed = 0f;
+        activeVerticalVelocity = 0f;
+        activeMoveDirection = Vector3.zero;
+
         // Set initial state
         SwitchState(GroundedState);
     }
@@ -150,6 +161,7 @@ public class PlayerStateMachine : MonoBehaviour
     {
         CheckGrounded();
         UpdateFallTime();
+        UpdateAimState();
         CurrentState.UpdateState();
         SyncAnimations();
         UpdateDebugText();
@@ -158,6 +170,7 @@ public class PlayerStateMachine : MonoBehaviour
     private void FixedUpdate()
     {
         CurrentState.FixedUpdateState();
+        MoveCharacter(); // Apply movement every fixed update
     }
 
     private void OnTriggerEnter(Collider other)
@@ -213,6 +226,8 @@ public class PlayerStateMachine : MonoBehaviour
         CurrentState?.ExitState();
         CurrentState = newState;
         CurrentState.EnterState();
+        
+        Debug.Log($"Switched to {newState.GetType().Name}");
     }
     
     public void OnInteractionComplete(MultiStateInteractable interactable)
@@ -221,10 +236,84 @@ public class PlayerStateMachine : MonoBehaviour
     }
 
     #endregion State Control ---------------------------------------------------------------
+
+
+
+
+    #region Aiming ---------------------------------------------------------------
+
+    
+    private void UpdateAimState()
+    {
+        // Toggle aim mode based on input
+        if (input.AimInput)
+        {
+            if (!_isAiming)
+            {
+                _isAiming = true;
+                _timeEnteredAimMode = Time.time;
+            
+                // Set camera priorities to switch to aim camera
+                if (aimCamera != null && freeLookCamera != null)
+                {
+                    aimCamera.Priority = aimCameraPriority;
+                    freeLookCamera.Priority = freelookCameraPriority;
+                }
+            }
+        }
+        else if (_isAiming)
+        {
+            _isAiming = false;
+        
+            // Reset camera priorities
+            if (aimCamera != null && freeLookCamera != null)
+            {
+                freeLookCamera.Priority = aimCameraPriority;
+                aimCamera.Priority = freelookCameraPriority;
+            }
+        }
+    }
+    
+    public Vector3 GetCameraAimDirection()
+    {
+        if (freeLookCamera == null)
+            return transform.forward;
+        
+        Vector3 cameraForward = freeLookCamera.transform.forward;
+        cameraForward.y = 0;
+    
+        if (cameraForward.sqrMagnitude < 0.001f)
+            return _lastAimDirection;
+        
+        cameraForward.Normalize();
+        _lastAimDirection = cameraForward;
+        return cameraForward;
+    }
+    public void HandleAimRotation()
+    {
+        if (!_isAiming)
+            return;
+        
+        Vector3 aimDirection = GetCameraAimDirection();
+        Quaternion targetRotation = Quaternion.LookRotation(aimDirection);
+    
+        // Rotate player to face aim direction
+        RotateCharacter(
+            targetRotation,
+            aimRotationSpeed,
+            1.0f
+        );
+    }
+    
+
+    #endregion Aiming ---------------------------------------------------------------
+    
     
     
     #region Movement ---------------------------------------------------------------
     
+
+
     private void CheckGrounded()
     {
         Vector3 spherePosition = transform.position + groundCheckOffset;
@@ -247,10 +336,22 @@ public class PlayerStateMachine : MonoBehaviour
         }
     }
 
-    public void MoveCharacter(Vector3 movement)
+
+    private void MoveCharacter()
     {
-        // Simply apply the movement as provided by the state
-        // Each state is responsible for updating activeMoveSpeed for animations
+        // Create movement vector using the active properties
+        Vector3 movement = Vector3.zero;
+    
+        // Only apply horizontal movement if we have both direction and speed
+        if (activeMoveDirection.sqrMagnitude > 0.001f && activeMoveSpeed > 0.01f)
+        {
+            movement = activeMoveDirection * activeMoveSpeed;
+        }
+    
+        // Always apply vertical movement
+        movement.y = activeVerticalVelocity;
+    
+        // Apply movement
         controller.Move(movement * Time.fixedDeltaTime);
     }
 
@@ -263,9 +364,20 @@ public class PlayerStateMachine : MonoBehaviour
         );
     }
     
+
     public void SetMoveSpeed(float speed)
     {
         activeMoveSpeed = speed;
+    }
+    
+    public void SetMoveDirection(Vector3 direction)
+    {
+        activeMoveDirection = direction;
+    }
+    
+    public void SetVerticalVelocity(float velocity)
+    {
+        activeVerticalVelocity = velocity;
     }
     
     public void SetAirTime(float time)
@@ -282,10 +394,23 @@ public class PlayerStateMachine : MonoBehaviour
     {
         LandingIntensity = intensity;
     }
+    
+    public float CalculateGravityVelocity(float currentVelocity, float deltaTime)
+    {
+        // Calculate new vertical velocity with gravity applied
+        float newVerticalVelocity = currentVelocity + (gravity * deltaTime);
+    
+        // Limit to terminal velocity
+        newVerticalVelocity = Mathf.Max(newVerticalVelocity, maxVerticalVelocity);
+    
+        return newVerticalVelocity;
+    }
 
     public float CalculateTargetSpeed(float movementIntensity)
     {
-        LockSprinting = input.MoveSpeedInput;
+        
+        LockSprinting = input.MoveSpeedInput || _isAiming;
+    
         if (movementIntensity < PlayerInput.MovementInputThreshold)
             return 0f;
 
@@ -307,9 +432,7 @@ public class PlayerStateMachine : MonoBehaviour
             else
                 return walkSpeed;
         }
-
     }
-    
     
     public Vector3 CalculateMoveDirection()
     {
@@ -353,6 +476,9 @@ public class PlayerStateMachine : MonoBehaviour
         float fallBlend = CurrentState is PlayerLandingState ? LandingIntensity : Mathf.Clamp01(FallTime / maxFallTime);
         animator.SetFloat(_fallTimeHash, fallBlend);
 
+        // Set aiming parameter
+        animator.SetBool(_isAimingHash, _isAiming);
+        
         UpdateMovementAnimation();
     }
 
@@ -394,13 +520,15 @@ public class PlayerStateMachine : MonoBehaviour
 
         debugText.text = $"State: {CurrentState.GetType().Name}\n" +
                          $"IsGrounded: {IsGrounded}\n" +
+                         $"IsAiming: {_isAiming}\n" +
                          $"AirTime: {AirTime}\n" +
                          $"FallTime: {FallTime}\n" +
                          $"LandingIntensity: {LandingIntensity}\n" +
-                         $"ActiveMoveSpeed: {activeMoveSpeed}\n"
-                         ;
-
+                         $"MoveDirection: {activeMoveDirection}\n" +
+                         $"ActiveMoveSpeed: {activeMoveSpeed}\n" +
+                         $"ActiveVerticalVelocity: {activeVerticalVelocity}\n";
     }
+    
     private void OnDrawGizmos()
     {
         if (IsGrounded)

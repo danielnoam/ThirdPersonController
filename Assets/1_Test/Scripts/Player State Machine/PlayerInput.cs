@@ -11,6 +11,7 @@ public class PlayerInput : MonoBehaviour
     public bool MoveSpeedInput { get; private set; }
     public bool PlayerInteractInput { get; private set; }
     public bool RobotInteractInput { get; private set; }
+    public bool AimInput { get; private set; }
     
     // Buffer settings
     [Header("Settings")] 
@@ -50,7 +51,8 @@ public class PlayerInput : MonoBehaviour
             Input.GetAxis("Mouse Y")
         );
         
-        // Check for new input presses and update buffers
+        AimInput = Input.GetMouseButton(1);
+        
         if (Input.GetButtonDown("Jump"))
         {
             _jumpBufferCounter = jumpBufferTime;
@@ -66,8 +68,6 @@ public class PlayerInput : MonoBehaviour
             _robotInteractBufferCounter = interactBufferTime;
         }
         
-        // Update other inputs
-        WalkInput = Input.GetButton("Walk");
         
         if (toggleSprintInput)
         {
@@ -86,6 +86,8 @@ public class PlayerInput : MonoBehaviour
         } else {
             MoveSpeedInput = Input.GetKeyDown(KeyCode.CapsLock);
         }
+        
+        WalkInput = Input.GetButton("Walk");
 
         
         // Set buffered inputs

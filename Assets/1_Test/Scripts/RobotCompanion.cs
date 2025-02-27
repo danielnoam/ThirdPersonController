@@ -551,8 +551,8 @@ public class RobotCompanion : MonoBehaviour
        }
    }
    
-       private void Move(Transform target)
-        {
+    private void Move(Transform target)
+    {
 
        // Calculate the direction to the target in the horizontal plane only
        Vector3 targetPosition = new Vector3(target.position.x, transform.position.y, target.position.z);

@@ -2,55 +2,64 @@ using UnityEngine;
 
 public class PlayerInteractingState : PlayerBaseState
 {
-    private Vector3 _moveDirection;
-    private float _currentSpeed;
-    private Quaternion _targetRotation;
-
-    public PlayerInteractingState(PlayerStateMachine stateMachine) : base(stateMachine) 
-    {
-        _targetRotation = stateMachine.transform.rotation;
-    }
+    public PlayerInteractingState(PlayerStateMachine stateMachine) : base(stateMachine) { }
     
     public override void EnterState()
     {
-        _currentSpeed = StateMachine.activeMoveSpeed;
+        // We inherit the current speed and direction
     }
     
     public override void ExitState()
     {
-        _moveDirection = Vector3.zero;
+        // Don't reset movement properties here - let the next state handle it
     }
 
     public override void UpdateState()
     {
-        // Gradually reduce speed to 0
-        _currentSpeed = Mathf.MoveTowards(_currentSpeed, 0f, StateMachine.acceleration * 2f * Time.deltaTime);
-
-        // Only reset move direction when completely stopped
-        if (_currentSpeed <= 0.01f)
-        {
-            _moveDirection = Vector3.zero;
-        }
-
-        // Update state machine's speed for animations
-        StateMachine.SetMoveSpeed(_currentSpeed);
-
         CheckStateTransitions();
     }
 
-
     public override void FixedUpdateState()
     {
-        // Create movement vector using the calculated speed and direction
-        Vector3 movement = _moveDirection * _currentSpeed;
-        movement.y = StateMachine.groundedGravity;
-
-        StateMachine.MoveCharacter(movement);
+        HandleMovement();
+        StateMachine.SetVerticalVelocity(StateMachine.groundedGravity);
     }
     
+    private void HandleMovement()
+    {
+        // Gradually reduce speed to 0
+        float newSpeed = Mathf.MoveTowards(
+            StateMachine.activeMoveSpeed, 
+            0f, 
+            StateMachine.acceleration * 2f * Time.fixedDeltaTime
+        );
+        
+        StateMachine.SetMoveSpeed(newSpeed);
+
+        // Only reset move direction when completely stopped
+        if (newSpeed <= 0.01f)
+        {
+            StateMachine.SetMoveDirection(Vector3.zero);
+        }
+        
+        // If aiming, maintain camera-facing direction
+        if (StateMachine.IsAiming)
+        {
+            Vector3 aimDirection = StateMachine.GetCameraAimDirection();
+            Quaternion targetRotation = Quaternion.LookRotation(aimDirection);
+            
+            // Smoothly rotate to face camera direction
+            StateMachine.RotateCharacter(
+                targetRotation, 
+                StateMachine.aimRotationSpeed,
+                1.0f
+            );
+        }
+    }
     
     private void CheckStateTransitions()
     {
+        // Fall
         if (!StateMachine.IsGrounded && StateMachine.FallTime > StateMachine.fallThreshold)
         {
             StateMachine.SwitchState(StateMachine.FallingState);
@@ -58,13 +67,13 @@ public class PlayerInteractingState : PlayerBaseState
             return;
         }
 
+        // Jump
         if (StateMachine.input.JumpInput)
         {
             StateMachine.SwitchState(StateMachine.JumpingState);
             StateMachine.currentInteractable.CancelInteraction();
             return;
         }
-        
     }
     
     public void OnInteractionComplete(MultiStateInteractable interactable)

@@ -178,6 +178,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83efbfa0b14c89845958bb52ea3b39d8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  toggleMoveSpeedInput: 1
+  toggleSprintInput: 0
   jumpBufferTime: 0.2
   interactBufferTime: 0.15
 --- !u!114 &7928860610601458710
@@ -198,7 +200,7 @@ MonoBehaviour:
   acceleration: 10
   rotationSpeed: 2
   airMoveSpeed: 4
-  airRotationSpeed: 2
+  airRotationSpeed: 1
   airAcceleration: 3
   airFriction: 2
   jumpForce: 8
