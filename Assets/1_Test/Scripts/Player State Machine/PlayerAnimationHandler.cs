@@ -92,54 +92,65 @@ public class PlayerAnimationHandler : MonoBehaviour
         _animator.SetInteger(_stateHash, (int)currentAnimState);
     }
 
-    private void UpdateMovementAnimation()
+private void UpdateMovementAnimation()
+{
+    // Default animation values
+    float verticalValue = 0f;
+    float horizontalValue = 0f;
+    
+    // Get current movement speed and direction from state machine
+    float activeSpeed = _stateMachine.activeHorizontalVelocity;
+    Vector3 moveDirection = _stateMachine.activeMoveDirection;
+
+    // Calculate the speed blend value for animation
+    float speedBlendValue = CalculateSpeedBlend(activeSpeed);
+
+    if (_stateMachine.IsAiming && moveDirection.sqrMagnitude > 0.01f && activeSpeed > 0.01f)
     {
-        // Default animation values
-        float verticalValue = 0f;
-        float horizontalValue = 0f;
+        // When aiming, map movement direction to the animation blend tree
+        Vector3 localMoveDir = transform.InverseTransformDirection(moveDirection);
         
-        // Get current movement speed and direction from state machine
-        float activeSpeed = _stateMachine.activeHorizontalVelocity;
-        Vector3 moveDirection = _stateMachine.activeMoveDirection;
-
-        // Calculate the speed blend value for animation
-        float speedBlendValue = CalculateSpeedBlend(activeSpeed);
-
-        if (_stateMachine.IsAiming && moveDirection.sqrMagnitude > 0.01f && activeSpeed > 0.01f)
+        if (localMoveDir.sqrMagnitude > 0.01f)
         {
-            // When aiming, map movement direction to the animation blend tree
-            Vector3 localMoveDir = transform.InverseTransformDirection(moveDirection);
+            // Normalize to get pure direction
+            localMoveDir.Normalize();
             
-            if (localMoveDir.sqrMagnitude > 0.01f)
+            // Use direction components for strafe animations
+            horizontalValue = localMoveDir.x;
+            verticalValue = localMoveDir.z;
+            
+            // For diagonal movement, make sure we reach the same magnitude as non-aiming movement
+            // by adjusting the scale factor calculation
+            float directionMagnitude = Mathf.Sqrt(horizontalValue * horizontalValue + verticalValue * verticalValue);
+            if (directionMagnitude > 0.01f)
             {
-                // Normalize to get pure direction
-                localMoveDir.Normalize();
+                // When moving diagonally, we need to apply a correction factor to reach the same blend values
+                // as non-aiming movement. This ensures diagonal movement has the proper animation intensity.
+                float scaleFactor = speedBlendValue / directionMagnitude;
                 
-                // Use direction components for strafe animations
-                horizontalValue = localMoveDir.x;
-                verticalValue = localMoveDir.z;
-                
-                // Scale by movement speed to match the blend tree
-                float directionMagnitude = Mathf.Sqrt(horizontalValue * horizontalValue + verticalValue * verticalValue);
-                if (directionMagnitude > 0.01f)
+                // For diagonal movement, we need to boost the scale factor to match non-aiming intensity
+                if (Mathf.Abs(horizontalValue) > 0.1f && Mathf.Abs(verticalValue) > 0.1f)
                 {
-                    float scaleFactor = speedBlendValue / directionMagnitude;
-                    horizontalValue *= scaleFactor;
-                    verticalValue *= scaleFactor;
+                    // This correction ensures diagonal movement reaches the same intensity as cardinal directions
+                    scaleFactor *= 1.414f; // Approximately sqrt(2) to compensate for diagonal normalization
                 }
+                
+                horizontalValue *= scaleFactor;
+                verticalValue *= scaleFactor;
             }
         }
-        else if (activeSpeed > 0.01f)
-        {
-            // Non-aiming movement just uses forward speed
-            verticalValue = speedBlendValue;
-            horizontalValue = 0f;
-        }
-
-        // Apply with smoothing
-        _animator.SetFloat(_verticalHash, verticalValue, verticalSmoothTime, Time.deltaTime);
-        _animator.SetFloat(_horizontalHash, horizontalValue, horizontalSmoothTime, Time.deltaTime);
     }
+    else if (activeSpeed > 0.01f)
+    {
+        // Non-aiming movement just uses forward speed
+        verticalValue = speedBlendValue;
+        horizontalValue = 0f;
+    }
+
+    // Apply with smoothing
+    _animator.SetFloat(_verticalHash, verticalValue, verticalSmoothTime, Time.deltaTime);
+    _animator.SetFloat(_horizontalHash, horizontalValue, horizontalSmoothTime, Time.deltaTime);
+}
 
     private void UpdateAimingAnimation()
     {

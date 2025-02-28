@@ -151,7 +151,7 @@ MonoBehaviour:
     m_Bits: 1
   IgnoreTag: Player
   AimDistance: 200
-  NoiseCancellation: 1
+  NoiseCancellation: 0
 --- !u!1 &7572823565956892122
 GameObject:
   m_ObjectHideFlags: 0
@@ -165,6 +165,7 @@ GameObject:
   - component: {fileID: 1443527037989428333}
   - component: {fileID: 838418673839610380}
   - component: {fileID: 3214977140950138407}
+  - component: {fileID: 5888813596588703751}
   m_Layer: 0
   m_Name: FreeCameraOrbital
   m_TagString: Untagged
@@ -180,8 +181,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7572823565956892122}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.047589444, y: -0.0708083, z: -0.0033820774, w: 0.9963483}
-  m_LocalPosition: {x: 0.12439364, y: 1.8048818, z: -6.432756}
+  m_LocalRotation: {x: -0.12915383, y: 0, z: 0, w: 0.9916246}
+  m_LocalPosition: {x: -0.666, y: 0.9415214, z: -4.2906837}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -256,7 +257,7 @@ MonoBehaviour:
       Radius: 2
       Height: 6
     Center:
-      Radius: 7
+      Radius: 5
       Height: 2.5
     Bottom:
       Radius: 2
@@ -264,7 +265,7 @@ MonoBehaviour:
     SplineCurvature: 0.5
   RecenteringTarget: 3
   HorizontalAxis:
-    Value: -8.130102
+    Value: 0
     Center: 0
     Range: {x: -180, y: 180}
     Wrap: 1
@@ -274,7 +275,7 @@ MonoBehaviour:
       Time: 2
     Restrictions: 0
   VerticalAxis:
-    Value: 5.742268
+    Value: 0
     Center: 17.5
     Range: {x: -10, y: 45}
     Wrap: 0
@@ -286,12 +287,12 @@ MonoBehaviour:
   RadialAxis:
     Value: 1
     Center: 1
-    Range: {x: 1, y: 1}
+    Range: {x: 1, y: 1.5}
     Wrap: 0
     Recentering:
-      Enabled: 0
-      Wait: 1
-      Time: 2
+      Enabled: 1
+      Wait: 7
+      Time: 3
     Restrictions: 0
 --- !u!114 &838418673839610380
 MonoBehaviour:
@@ -305,7 +306,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1e8b78ac948f05a46a6d8339a503172b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LookAtOffset: {x: 0, y: 1, z: 0}
+  LookAtOffset: {x: 0, y: 0.5, z: 0}
 --- !u!114 &3214977140950138407
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -364,6 +365,45 @@ MonoBehaviour:
         DecelTime: 0
   PlayerIndex: -1
   AutoEnableInputs: 1
+--- !u!114 &5888813596588703751
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7572823565956892122}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbe43d662878a7c43bcd44d43c9e2094, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CollideAgainst:
+    serializedVersion: 2
+    m_Bits: 1
+  IgnoreTag: Player
+  TransparentLayers:
+    serializedVersion: 2
+    m_Bits: 768
+  MinimumDistanceFromTarget: 0.3
+  AvoidObstacles:
+    Enabled: 1
+    DistanceLimit: 0
+    MinimumOcclusionTime: 0
+    CameraRadius: 0.4
+    UseFollowTarget:
+      Enabled: 0
+      YOffset: 0
+    Strategy: 0
+    MaximumEffort: 4
+    SmoothingTime: 0
+    Damping: 0.4
+    DampingWhenOccluded: 0.2
+  ShotQualityEvaluation:
+    Enabled: 0
+    OptimalDistance: 10
+    NearLimit: 5
+    FarLimit: 30
+    MaxQualityBoost: 0.2
 --- !u!1 &7702849316814007445
 GameObject:
   m_ObjectHideFlags: 0
@@ -392,8 +432,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7702849316814007445}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.047589444, y: -0.0708083, z: -0.0033820774, w: 0.9963483}
-  m_LocalPosition: {x: 0.12439364, y: 1.8048818, z: -6.432756}
+  m_LocalRotation: {x: -0.12915383, y: 0, z: 0, w: 0.9916246}
+  m_LocalPosition: {x: -0.666, y: 0.9415214, z: -4.2906837}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -582,9 +622,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 928d92d537407964ebcc114cea86935c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  freeLookCameraPriority: 10
+  aimCameraPriority: 15
+  aimRotationThreshold: 0.1
+  hideCursor: 1
   freeLookCamera: {fileID: 1702355851979379484}
   aimCamera: {fileID: 2033067464421729276}
   aimCore: {fileID: 950367796465062814}
-  freelookCameraPriority: 10
-  aimCameraPriority: 15
-  aimRotationThreshold: 0.1

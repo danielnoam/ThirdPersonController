@@ -1,27 +1,32 @@
 using UnityEngine;
 using Unity.Cinemachine;
+using UnityEngine.Serialization;
 
 public class CameraManager : MonoBehaviour
 {
-    [Header("Camera References")]
-    [SerializeField] private CinemachineCamera freeLookCamera;
-    [SerializeField] private CinemachineCamera aimCamera;
-    [SerializeField] private GameObject aimCore;
+
 
     [Header("Camera Settings")]
-    [SerializeField] private int freelookCameraPriority = 10;
+    [SerializeField] private int freeLookCameraPriority = 10;
     [SerializeField] private int aimCameraPriority = 15;
     [Tooltip("Minimum mouse movement required to rotate character when aiming")]
     [SerializeField] private float aimRotationThreshold = 0.1f;
 
+    [Header("Cursor")] 
+    [SerializeField] private bool hideCursor = true;
+    
+    [Header("References")]
+    [SerializeField] private CinemachineCamera freeLookCamera;
+    [SerializeField] private CinemachineCamera aimCamera;
+    [SerializeField] private GameObject aimCore;
+    
+    
+    
     // Reference to player input for camera controls
     private PlayerInputHandler _playerInputHandler;
     private Vector3 _lastAimDirection = Vector3.forward;
     private float _pitchAccumulation = 0f;
     private float _yawAccumulation = 0f;
-    public GameObject AimCore => aimCore;
-    public CinemachineCamera FreeLookCamera => freeLookCamera;
-    public CinemachineCamera AimCamera => aimCamera;
     public float AimRotationThreshold => aimRotationThreshold;
 
     private void Awake()
@@ -32,14 +37,21 @@ public class CameraManager : MonoBehaviour
             Debug.LogError("Camera references not assigned to CameraManager!");
         }
 
+        if (hideCursor)
+        {
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+        }
+
         // Set initial camera priorities
-        freeLookCamera.Priority = freelookCameraPriority + 5; // Start with free look as active camera
-        aimCamera.Priority = freelookCameraPriority;
+        freeLookCamera.Priority = freeLookCameraPriority + 5; // Start with free look as active camera
+        aimCamera.Priority = freeLookCameraPriority;
     }
 
     public void Initialize(PlayerInputHandler playerInputHandler)
     {
         _playerInputHandler = playerInputHandler;
+        freeLookCamera.Follow = playerInputHandler.transform;
     }
 
     public void UpdateCameraPosition(Vector3 playerPosition)
@@ -74,7 +86,7 @@ public class CameraManager : MonoBehaviour
     {
         // Set camera priorities to switch to aim camera
         aimCamera.Priority = aimCameraPriority;
-        freeLookCamera.Priority = freelookCameraPriority;
+        freeLookCamera.Priority = freeLookCameraPriority;
         
         // When switching to aim camera, align it with the freelook camera
         if (aimCamera && freeLookCamera)
@@ -87,7 +99,7 @@ public class CameraManager : MonoBehaviour
     {
         // Reset camera priorities
         freeLookCamera.Priority = aimCameraPriority;
-        aimCamera.Priority = freelookCameraPriority;
+        aimCamera.Priority = freeLookCameraPriority;
     }
 
     public bool IsAimCameraActive()
