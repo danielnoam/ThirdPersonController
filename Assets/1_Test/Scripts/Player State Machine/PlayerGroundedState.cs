@@ -11,7 +11,6 @@ public class PlayerGroundedState : PlayerBaseState
     
     public override void EnterState()
     {
-
     }
     
     public override void ExitState()
@@ -37,8 +36,8 @@ public class PlayerGroundedState : PlayerBaseState
     {
         // Calculate movement intensity (0-1)
         float movementIntensity = Mathf.Clamp01(
-            Mathf.Abs(StateMachine.input.MovementInput.x) + 
-            Mathf.Abs(StateMachine.input.MovementInput.y)
+            Mathf.Abs(StateMachine.InputHandler.MovementInput.x) + 
+            Mathf.Abs(StateMachine.InputHandler.MovementInput.y)
         );
 
         // Determine movement direction
@@ -56,8 +55,8 @@ public class PlayerGroundedState : PlayerBaseState
             Vector3 forward = aimDirection;
             Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
             
-            inputDirection = (forward * StateMachine.input.MovementInput.y + 
-                             right * StateMachine.input.MovementInput.x).normalized;
+            inputDirection = (forward * StateMachine.InputHandler.MovementInput.y + 
+                             right * StateMachine.InputHandler.MovementInput.x).normalized;
         }
         else
         {
@@ -65,7 +64,7 @@ public class PlayerGroundedState : PlayerBaseState
             inputDirection = StateMachine.CalculateMoveDirection();
             
             // Update rotation if moving
-            if (inputDirection.sqrMagnitude > PlayerInput.RotationInputThreshold)
+            if (inputDirection.sqrMagnitude > PlayerInputHandler.RotationInputThreshold)
             {
                 _targetRotation = Quaternion.LookRotation(inputDirection);
             }
@@ -77,7 +76,7 @@ public class PlayerGroundedState : PlayerBaseState
         float targetSpeed = StateMachine.CalculateTargetSpeed(movementIntensity);
     
         // Only update direction if we have meaningful input
-        if (inputMagnitude > PlayerInput.MovementInputThreshold)
+        if (inputMagnitude > PlayerInputHandler.MovementInputThreshold)
         {
             StateMachine.activeMoveDirection = inputDirection;
         }
@@ -126,19 +125,35 @@ public class PlayerGroundedState : PlayerBaseState
         }
 
         // Jump
-        if (StateMachine.input.JumpInput)
+        if (StateMachine.InputHandler.JumpInput)
         {
             StateMachine.SwitchState(StateMachine.JumpingState);
             return;
         }
         
         // Interact
-        if (StateMachine.CanInteract && StateMachine.input.PlayerInteractInput)
+        if (StateMachine.CanInteract && StateMachine.InputHandler.PlayerInteractInput)
         {
             StateMachine.currentInteractable.Interact(StateMachine.gameObject);
-            StateMachine.input.ConsumePlayerInteractBuffer();
             StateMachine.SwitchState(StateMachine.InteractingState);
             return;
+        }
+        
+        // Crouching
+        if (StateMachine.InputHandler.IsCrouchToggle)
+        {
+            if (StateMachine.InputHandler.CrouchInput)
+            {
+                StateMachine.InputHandler.ConsumeCrouchInput();
+                StateMachine.SwitchState(StateMachine.CrouchingState);
+                return;
+            }
+        } else {
+            if (StateMachine.InputHandler.CrouchInput)
+            {
+                StateMachine.SwitchState(StateMachine.CrouchingState);
+                return;
+            }
         }
     }
 }

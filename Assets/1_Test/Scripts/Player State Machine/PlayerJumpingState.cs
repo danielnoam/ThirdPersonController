@@ -6,7 +6,7 @@ public class PlayerJumpingState : PlayerBaseState
 
     public override void EnterState()
     {
-        StateMachine.input.ConsumeJumpBuffer();
+        StateMachine.InputHandler.ConsumeJumpBuffer();
         StateMachine.activeVerticalVelocity = StateMachine.jumpForce;
         StateMachine.AirTime = 0f;
     }
@@ -59,8 +59,8 @@ public class PlayerJumpingState : PlayerBaseState
             Vector3 forward = aimDirection;
             Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
             
-            inputDirection = (forward * StateMachine.input.MovementInput.y + 
-                             right * StateMachine.input.MovementInput.x).normalized;
+            inputDirection = (forward * StateMachine.InputHandler.MovementInput.y + 
+                             right * StateMachine.InputHandler.MovementInput.x).normalized;
         }
         else
         {
@@ -72,7 +72,7 @@ public class PlayerJumpingState : PlayerBaseState
         float inputMagnitude = inputDirection.magnitude;
         float targetSpeed;
 
-        if (inputMagnitude > PlayerInput.MovementInputThreshold)
+        if (inputMagnitude > PlayerInputHandler.MovementInputThreshold)
         {
             // When we have input, update the direction
             StateMachine.activeMoveDirection = inputDirection;
@@ -83,7 +83,7 @@ public class PlayerJumpingState : PlayerBaseState
                 // Aim rotation is now handled in HandleAimRotation
                 // No need to rotate character here
             } 
-            else if (inputDirection.sqrMagnitude > PlayerInput.RotationInputThreshold)
+            else if (inputDirection.sqrMagnitude > PlayerInputHandler.RotationInputThreshold)
             {
                 // Normal rotation when not aiming
                 StateMachine.RotateCharacter(

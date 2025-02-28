@@ -55,12 +55,12 @@ public class PlayerLandingState : PlayerBaseState
         );
     
         // Only update direction if we have meaningful input
-        if (inputMagnitude > PlayerInput.MovementInputThreshold)
+        if (inputMagnitude > PlayerInputHandler.MovementInputThreshold)
         {
             StateMachine.activeMoveDirection = inputDirection;
         
             // Update rotation if moving and NOT aiming
-            if (inputDirection.sqrMagnitude > PlayerInput.RotationInputThreshold && !StateMachine.IsAiming)
+            if (inputDirection.sqrMagnitude > PlayerInputHandler.RotationInputThreshold && !StateMachine.IsAiming)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(inputDirection);
                 // Use movement control as multiplier to limit rotation during recovery
@@ -111,7 +111,7 @@ public class PlayerLandingState : PlayerBaseState
         }
         
         // Jump
-        if (StateMachine.input.JumpInput)
+        if (StateMachine.InputHandler.JumpInput)
         {
             StateMachine.SwitchState(StateMachine.JumpingState);
             return;

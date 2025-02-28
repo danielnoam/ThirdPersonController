@@ -1,21 +1,14 @@
 using TMPro;
 using UnityEngine;
 
-public enum PlayerAnimationState
-{
-    Grounded = 0,
-    Jump = 1,
-    Fall = 2,
-    Landing = 3,
-    Interact = 4,
-}
 
-[RequireComponent(typeof(PlayerInput))]
+[RequireComponent(typeof(PlayerInputHandler))]
 [RequireComponent(typeof(CharacterController))]
 public class PlayerStateMachine : MonoBehaviour
 {
     public PlayerBaseState CurrentState { get; private set; }
     public PlayerGroundedState GroundedState { get; private set; }
+    public PlayerCrouchingState CrouchingState { get; private set; }
     public PlayerJumpingState JumpingState { get; private set; }
     public PlayerFallingState FallingState { get; private set; }
     public PlayerLandingState LandingState { get; private set; }
@@ -88,23 +81,32 @@ public class PlayerStateMachine : MonoBehaviour
     public float activeVerticalVelocity { get; set; }
     public Vector3 activeMoveDirection { get; set; } = Vector3.zero;
     public bool IsGrounded { get; private set; }
+    public bool CanStand { get; private set; }
     public bool CanInteract { get; private set; }
     public bool IsAiming { get; private set; }
-    public PlayerInput input { get; private set; }
+    public PlayerInputHandler InputHandler { get; private set; }
     public MultiStateInteractable currentInteractable { get; private set; }
     private CharacterController _controller;
     private bool _lockSprinting;
     private Vector3 _lastRotationDirection = Vector3.forward;
+    private float _defaultCharacterHeight;
+    private Vector3 _defaultCharacterCenter;
+    private float _crouchCharacterHeight = 1.2333f;
+    private Vector3 _crouchCharacterCenter = new Vector3(0, -0.3f, 0.2f);
+    
 
     private void Awake()
     {
         _controller = GetComponent<CharacterController>();
-        input = GetComponent<PlayerInput>();
+        InputHandler = GetComponent<PlayerInputHandler>();
         GroundedState = new PlayerGroundedState(this);
         JumpingState = new PlayerJumpingState(this);
         FallingState = new PlayerFallingState(this);
         LandingState = new PlayerLandingState(this);
         InteractingState = new PlayerInteractingState(this);
+        CrouchingState = new PlayerCrouchingState(this);
+        _defaultCharacterHeight = _controller.height;
+        _defaultCharacterCenter = _controller.center;
         
         SwitchState(GroundedState);
     }
@@ -113,7 +115,7 @@ public class PlayerStateMachine : MonoBehaviour
     {
         if (!robot) robot = FindFirstObjectByType<RobotCompanion>();
         if (!cameraManager) cameraManager = FindFirstObjectByType<CameraManager>();
-        cameraManager.Initialize(input);
+        cameraManager.Initialize(InputHandler);
     }
 
     private void Update()
@@ -125,6 +127,7 @@ public class PlayerStateMachine : MonoBehaviour
         }
         
         CheckGrounded();
+        CheckCeiling();
         UpdateFallTime();
         HandleCameraInputs();
         CurrentState.UpdateState();
@@ -136,7 +139,22 @@ public class PlayerStateMachine : MonoBehaviour
         CurrentState.FixedUpdateState();
         MoveCharacter(); // Apply movement every fixed update
     }
+    
+    
+    #region Collisions ---------------------------------------------------------------
 
+    private void CheckGrounded()
+    {
+        Vector3 spherePosition = transform.position + groundCheckOffset;
+        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
+    }
+
+    private void CheckCeiling()
+    {
+        Vector3 spherePosition = transform.position - groundCheckOffset;
+        CanStand = !Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
+    }
+    
     private void OnTriggerEnter(Collider other)
     {
         other.TryGetComponent(out MultiStateInteractable interactable);
@@ -154,12 +172,12 @@ public class PlayerStateMachine : MonoBehaviour
         if (interactable && interactable == currentInteractable)
         {
             // Allow player interaction
-            CanInteract = currentInteractable.PlayerCanInteract() && CurrentState == GroundedState;
+            CanInteract = currentInteractable.PlayerCanInteract() && (CurrentState == GroundedState || CurrentState == CrouchingState);
             
             // Allow robot interaction
-            if (robot && currentInteractable.RobotCanInteract() && input.RobotInteractInput)
+            if (robot && currentInteractable.RobotCanInteract() && InputHandler.RobotInteractInput)
             {
-                input.ConsumeRobotInteractBuffer();
+                InputHandler.ConsumeRobotInteractBuffer();
                 robot.InteractWith(currentInteractable);
             }
 
@@ -180,6 +198,9 @@ public class PlayerStateMachine : MonoBehaviour
             CanInteract = false;
         }
     }
+
+    #endregion Collisions ---------------------------------------------------------------
+    
     
     #region State Control ---------------------------------------------------------------
 
@@ -197,12 +218,13 @@ public class PlayerStateMachine : MonoBehaviour
 
     #endregion State Control ---------------------------------------------------------------
 
+    
     #region Aiming ---------------------------------------------------------------
     
     private void HandleCameraInputs()
     {
         // Toggle aim mode based on input
-        if (input.AimInput)
+        if (InputHandler.AimInput)
         {
             if (!IsAiming)
             {
@@ -245,7 +267,7 @@ public class PlayerStateMachine : MonoBehaviour
         float angleChange = Vector3.Angle(_lastRotationDirection, aimDirection);
         
         // Check if mouse movement exceeds our threshold
-        if (input.MouseDelta.magnitude > cameraManager.AimRotationThreshold || angleChange > 1.0f)
+        if (InputHandler.MouseDelta.magnitude > cameraManager.AimRotationThreshold || angleChange > 1.0f)
         {
             // There's significant mouse movement, so update the character rotation
             Quaternion targetRotation = Quaternion.LookRotation(aimDirection);
@@ -264,8 +286,22 @@ public class PlayerStateMachine : MonoBehaviour
     
     #endregion Aiming ---------------------------------------------------------------
     
-    #region Movement ---------------------------------------------------------------
     
+    #region Movement ---------------------------------------------------------------
+
+    public void SetCharacterHeight(bool crouching)
+    {
+        if (crouching)
+        {
+            _controller.height = _crouchCharacterHeight;
+            _controller.center = _crouchCharacterCenter;
+        }
+        else
+        {
+            _controller.height = _defaultCharacterHeight;
+            _controller.center = _defaultCharacterCenter;
+        }
+    }
     private void MoveCharacter()
     {
         // Create movement vector using the active properties
@@ -293,12 +329,6 @@ public class PlayerStateMachine : MonoBehaviour
         );
     }
     
-    private void CheckGrounded()
-    {
-        Vector3 spherePosition = transform.position + groundCheckOffset;
-        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
-    }
-    
     private void UpdateFallTime()
     {
         // Only increment fall time when moving downward
@@ -321,25 +351,22 @@ public class PlayerStateMachine : MonoBehaviour
 
     public float CalculateTargetSpeed(float movementIntensity)
     {
-        _lockSprinting = input.MoveSpeedInput || IsAiming;
+        _lockSprinting = InputHandler.MoveSpeedInput || IsAiming || CurrentState == CrouchingState;
     
-        if (movementIntensity < PlayerInput.MovementInputThreshold)
+        if (movementIntensity < PlayerInputHandler.MovementInputThreshold)
             return 0f;
 
         if (!_lockSprinting)
         {
-            if (input.WalkInput)
-                return walkSpeed;
-            else if (input.SprintInput && movementIntensity > PlayerInput.SprintInputThreshold)
+            if (InputHandler.SprintInput && movementIntensity > PlayerInputHandler.SprintInputThreshold)
                 return sprintSpeed;
             else
                 return runSpeed;
         }
         else
         {
-            if (input.WalkInput)
-                return walkSpeed;
-            else if (input.SprintInput && movementIntensity > PlayerInput.SprintInputThreshold)
+
+            if (InputHandler.SprintInput && movementIntensity > PlayerInputHandler.SprintInputThreshold)
                 return runSpeed;
             else
                 return walkSpeed;
@@ -349,11 +376,14 @@ public class PlayerStateMachine : MonoBehaviour
     public Vector3 CalculateMoveDirection()
     {
         if (!cameraManager) return transform.forward;
-        return cameraManager.CalculateMoveDirection(input.MovementInput);
+        return cameraManager.CalculateMoveDirection(InputHandler.MovementInput);
     }
     
     #endregion Movement ---------------------------------------------------------------
 
+    
+    
+    
     
     #region Utility ---------------------------------------------------------------
 
@@ -363,18 +393,20 @@ public class PlayerStateMachine : MonoBehaviour
 
         debugText.text = $"State: {CurrentState.GetType().Name}\n" +
                          $"IsGrounded: {IsGrounded}\n" +
+                         $"CanStand: {CanStand}\n" +
                          $"IsAiming: {IsAiming}\n" +
                          $"AirTime: {AirTime}\n" +
                          $"FallTime: {FallTime}\n" +
                          $"LandingIntensity: {LandingIntensity}\n" +
                          $"MoveDirection: {activeMoveDirection}\n" +
                          $"ActiveMoveSpeed: {activeHorizontalVelocity}\n" +
-                         $"MouseDelta: {input.MouseDelta.magnitude}\n" +
+                         $"MouseDelta: {InputHandler.MouseDelta.magnitude}\n" +
                          $"ActiveVerticalVelocity: {activeVerticalVelocity}\n";
     }
     
     private void OnDrawGizmos()
     {
+        // Ground sphere
         if (IsGrounded)
         {
             Gizmos.color = Color.green;
@@ -387,9 +419,13 @@ public class PlayerStateMachine : MonoBehaviour
         {
             Gizmos.color = Color.red;
         }
-
-        Vector3 spherePosition = transform.position + groundCheckOffset;
-        Gizmos.DrawWireSphere(spherePosition, groundCheckRadius);
+        Vector3 groundSpherePosition = transform.position + groundCheckOffset;
+        Gizmos.DrawWireSphere(groundSpherePosition, groundCheckRadius);
+        
+        // Ceiling sphere
+        Gizmos.color = CanStand ? Color.green : Color.red;
+        Vector3 ceilingSpherePosition = transform.position - groundCheckOffset;
+        Gizmos.DrawWireSphere(ceilingSpherePosition, groundCheckRadius);
     }
 
     #endregion Utility ---------------------------------------------------------------

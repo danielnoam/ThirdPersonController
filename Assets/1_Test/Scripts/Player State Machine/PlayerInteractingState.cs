@@ -6,6 +6,7 @@ public class PlayerInteractingState : PlayerBaseState
     
     public override void EnterState()
     {
+        StateMachine.InputHandler.ConsumePlayerInteractBuffer();
     }
     
     public override void ExitState()
@@ -52,7 +53,7 @@ public class PlayerInteractingState : PlayerBaseState
         }
 
         // Jump
-        if (StateMachine.input.JumpInput)
+        if (StateMachine.InputHandler.JumpInput)
         {
             StateMachine.SwitchState(StateMachine.JumpingState);
             StateMachine.currentInteractable.CancelInteraction();

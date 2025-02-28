@@ -1,5 +1,16 @@
 using UnityEngine;
 
+
+public enum PlayerAnimationState
+{
+    Grounded = 0,
+    Jump = 1,
+    Fall = 2,
+    Landing = 3,
+    Interact = 4,
+    Crouch = 5,
+}
+
 [RequireComponent(typeof(Animator))]
 [RequireComponent(typeof(PlayerStateMachine))]
 public class PlayerAnimationHandler : MonoBehaviour
@@ -73,6 +84,7 @@ public class PlayerAnimationHandler : MonoBehaviour
             PlayerFallingState => PlayerAnimationState.Fall,
             PlayerLandingState => PlayerAnimationState.Landing,
             PlayerInteractingState => PlayerAnimationState.Interact,
+            PlayerCrouchingState => PlayerAnimationState.Crouch,
             _ => PlayerAnimationState.Grounded
         };
 

@@ -15,7 +15,7 @@ public class CameraManager : MonoBehaviour
     [SerializeField] private float aimRotationThreshold = 0.1f;
 
     // Reference to player input for camera controls
-    private PlayerInput _playerInput;
+    private PlayerInputHandler _playerInputHandler;
     private Vector3 _lastAimDirection = Vector3.forward;
     private float _pitchAccumulation = 0f;
     private float _yawAccumulation = 0f;
@@ -37,9 +37,9 @@ public class CameraManager : MonoBehaviour
         aimCamera.Priority = freelookCameraPriority;
     }
 
-    public void Initialize(PlayerInput playerInput)
+    public void Initialize(PlayerInputHandler playerInputHandler)
     {
-        _playerInput = playerInput;
+        _playerInputHandler = playerInputHandler;
     }
 
     public void UpdateCameraPosition(Vector3 playerPosition)
@@ -52,16 +52,16 @@ public class CameraManager : MonoBehaviour
 
     public void HandleCameraRotation()
     {
-        if (!_playerInput) return;
+        if (!_playerInputHandler) return;
 
         // Get the appropriate sensitivity based on current camera state
         float cameraSensitivity = IsAimCameraActive() 
-            ? _playerInput.AimCameraSensitivity 
-            : _playerInput.FreeCameraSensitivity;
+            ? _playerInputHandler.AimCameraSensitivity 
+            : _playerInputHandler.FreeCameraSensitivity;
     
         // Accumulate rotation values
-        _yawAccumulation += _playerInput.MouseDelta.x * _playerInput.MouseSensitivity * cameraSensitivity;
-        _pitchAccumulation -= _playerInput.MouseDelta.y * _playerInput.MouseSensitivity * cameraSensitivity;
+        _yawAccumulation += _playerInputHandler.MouseDelta.x * _playerInputHandler.MouseSensitivity * cameraSensitivity;
+        _pitchAccumulation -= _playerInputHandler.MouseDelta.y * _playerInputHandler.MouseSensitivity * cameraSensitivity;
     
         // Optional: Clamp pitch to prevent camera flipping
         _pitchAccumulation = Mathf.Clamp(_pitchAccumulation, -89f, 89f);

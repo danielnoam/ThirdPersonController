@@ -112,7 +112,7 @@ CharacterController:
   m_Enabled: 1
   serializedVersion: 3
   m_Height: 1.85
-  m_Radius: 0.25
+  m_Radius: 0.35
   m_SlopeLimit: 45
   m_StepOffset: 0.3
   m_SkinWidth: 0.0001
@@ -149,6 +149,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   toggleMoveSpeedInput: 1
   toggleSprintInput: 0
+  toggleCrouchInput: 1
   toggleAimInput: 0
   jumpBufferTime: 0.2
   interactBufferTime: 0.15
