@@ -61,7 +61,7 @@ public class PlayerInteractingState : PlayerBaseState
         }
     }
     
-    public void OnInteractionComplete(MultiStateInteractable interactable)
+    public void OnInteractionComplete(IInteractable interactable)
     {
         StateMachine.SwitchState(StateMachine.GroundedState);
     }

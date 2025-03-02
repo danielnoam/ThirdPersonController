@@ -139,7 +139,7 @@ public class RobotCompanion : MonoBehaviour
     private Color _defaultEyeLightColor;
     private float _fullEyeLightIntensity;
     
-    private MultiStateInteractable _currentInteractable;
+    private IInteractable _currentInteractable;
     private float _interactDistance = 0.5f; 
 
    private void Awake()
@@ -214,7 +214,7 @@ public class RobotCompanion : MonoBehaviour
    #region Commends ------------------------------------------------------------------------------
 
 
-   public void InteractWith(MultiStateInteractable interactable)
+   public void InteractWith(IInteractable interactable)
    {
        if (!CanCommend()) return;
     
@@ -776,7 +776,7 @@ public class RobotCompanion : MonoBehaviour
        if (distanceToTarget <= _interactDistance)
        {
            // If we have an interactable object, interact with it
-           if (_currentInteractable)
+           if (_currentInteractable != null)
            {
                // Change state to interacting
                currentState = RobotState.Interacting;
@@ -785,8 +785,8 @@ public class RobotCompanion : MonoBehaviour
                rigidBody.linearVelocity = Vector3.zero;
             
                // Perform the interaction
-               _currentInteractable.Interact(gameObject);
-               print("Interacting with " + _currentInteractable.name);
+               _currentInteractable.OnInteractionStart(gameObject);
+               print("Interacting with " + _currentInteractable);
            }
            else
            {
@@ -807,7 +807,7 @@ public class RobotCompanion : MonoBehaviour
            return IsOn() && currentState != RobotState.Interacting;
    }
 
-   public void OnInteractionComplete(MultiStateInteractable interactable)
+   public void OnInteractionComplete(IInteractable interactable)
    {
        _currentInteractable = null;
        FollowPlayer();

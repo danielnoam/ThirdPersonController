@@ -2,7 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
 
-
+[RequireComponent(typeof(LineRenderer))]
 [RequireComponent(typeof(PlayerInputHandler))]
 [RequireComponent(typeof(CharacterController))]
 public class PlayerStateMachine : MonoBehaviour
@@ -68,10 +68,14 @@ public class PlayerStateMachine : MonoBehaviour
     [SerializeField] private Vector3 groundCheckOffset = new Vector3(0, -0.1f, 0);
     [Tooltip("Layer mask defining what objects count as environment")]
     [SerializeField] private LayerMask environmentLayer = 1;
+    
+    [Header("Aim Ray")]
+    [Tooltip("Maximum distance the aim ray will travel")]
+    public float aimRayMaxDistance = 20f;
+    [Tooltip("Layer mask for objects that can be hit by the aim ray")]
+    public LayerMask aimRayHitMask;
 
     [Header("References")] 
-    [SerializeField] private RobotCompanion robot;
-    [SerializeField] private CameraManager cameraManager;
     [SerializeField] private TextMeshProUGUI debugText;
     
     
@@ -86,8 +90,12 @@ public class PlayerStateMachine : MonoBehaviour
     public bool CanInteract { get; private set; }
     public bool IsAiming { get; private set; }
     public PlayerInputHandler InputHandler { get; private set; }
-    public MultiStateInteractable currentInteractable { get; private set; }
+    public IInteractable currentInteractable { get; private set; }
+    public IInteractable currentAimedInteractable { get; private set; }
     private CharacterController _controller;
+    private RobotCompanion _robot;
+    private CameraManager _cameraManager;
+    private LineRenderer _lineRenderer;
     private bool _lockSprinting;
     private Vector3 _lastRotationDirection = Vector3.forward;
     private float _defaultCharacterHeight;
@@ -95,9 +103,12 @@ public class PlayerStateMachine : MonoBehaviour
     private float _crouchCharacterHeight = 1.2333f;
     private Vector3 _crouchCharacterCenter = new Vector3(0, -0.3f, 0.2f);
     
+    
 
     private void Awake()
     {
+        _lineRenderer = GetComponent<LineRenderer>();
+        SetupLineRenderer();
         _controller = GetComponent<CharacterController>();
         InputHandler = GetComponent<PlayerInputHandler>();
         GroundedState = new PlayerGroundedState(this);
@@ -114,22 +125,22 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void Start()
     {
-        if (!robot) robot = FindFirstObjectByType<RobotCompanion>();
-        if (!cameraManager) cameraManager = FindFirstObjectByType<CameraManager>();
-        cameraManager.Initialize(InputHandler);
+        if (!_robot) _robot = FindFirstObjectByType<RobotCompanion>();
+        if (!_cameraManager) _cameraManager = FindFirstObjectByType<CameraManager>();
+        _cameraManager.Initialize(InputHandler);
     }
 
     private void Update()
     {
-        if (cameraManager)
+        if (_cameraManager)
         {
-            cameraManager.UpdateCameraPosition(transform.position);
-            cameraManager.HandleCameraRotation();
+            _cameraManager.UpdateCameraPosition(transform.position);
+            _cameraManager.HandleCameraRotation();
         }
         
-        CheckGrounded();
-        CheckCeiling();
+        CheckCollisions();
         UpdateFallTime();
+        UpdateAimRay();
         HandleCameraInputs();
         CurrentState.UpdateState();
         UpdateDebugText();
@@ -144,23 +155,19 @@ public class PlayerStateMachine : MonoBehaviour
     
     #region Collisions ---------------------------------------------------------------
 
-    private void CheckGrounded()
+    private void CheckCollisions()
     {
-        Vector3 spherePosition = transform.position + groundCheckOffset;
-        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, environmentLayer);
+        Vector3 groundSpherePosition = transform.position + groundCheckOffset;
+        IsGrounded = Physics.CheckSphere(groundSpherePosition, groundCheckRadius, environmentLayer);
+        
+        Vector3 ceilingSpherePosition = transform.position - groundCheckOffset;
+        CanStand = !Physics.CheckSphere(ceilingSpherePosition, groundCheckRadius, environmentLayer);
     }
-
-    private void CheckCeiling()
-    {
-        Vector3 spherePosition = transform.position - groundCheckOffset;
-        CanStand = !Physics.CheckSphere(spherePosition, groundCheckRadius, environmentLayer);
-    }
+    
     
     private void OnTriggerEnter(Collider other)
     {
-        other.TryGetComponent(out MultiStateInteractable interactable);
-        
-        if (interactable)
+        if (other.TryGetComponent(out IInteractable interactable))
         {
             currentInteractable = interactable;
         }
@@ -168,31 +175,28 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void OnTriggerStay(Collider other)
     {
-        other.TryGetComponent(out MultiStateInteractable interactable);
-        
-        if (interactable && interactable == currentInteractable)
+        if (other.TryGetComponent(out IInteractable interactable) && interactable == currentInteractable)
         {
             // Allow player interaction
-            CanInteract = currentInteractable.PlayerCanInteract() && (CurrentState == GroundedState || CurrentState == CrouchingState);
-            
+            CanInteract = currentInteractable.PlayerCanInteract && (CurrentState == GroundedState || CurrentState == CrouchingState) && (currentInteractable != currentAimedInteractable);
+        
             // Allow robot interaction
-            if (robot && currentInteractable.RobotCanInteract() && InputHandler.RobotInteractInput)
+            if (_robot && currentInteractable.RobotCanInteract && InputHandler.RobotInteractInput)
             {
                 InputHandler.ConsumeRobotInteractBuffer();
-                robot.InteractWith(currentInteractable);
+                _robot.InteractWith(currentInteractable);
             }
 
-            if (CanInteract && !currentInteractable.Highlighted())
+            if (CanInteract && !currentInteractable.IsHighlighted())
             {
                 currentInteractable.SetHighlight(true);
             }
         }
     }
-    
+
     private void OnTriggerExit(Collider other)
     {
-        other.TryGetComponent(out MultiStateInteractable interactable);
-        if (interactable && interactable == currentInteractable)
+        if (other.TryGetComponent(out IInteractable interactable) && interactable == currentInteractable)
         {
             currentInteractable.SetHighlight(false);
             currentInteractable = null;
@@ -212,15 +216,133 @@ public class PlayerStateMachine : MonoBehaviour
         CurrentState.EnterState();
     }
     
-    public void OnInteractionComplete(MultiStateInteractable interactable)
+    public void OnInteractionComplete(IInteractable interactable)
     {
         InteractingState.OnInteractionComplete(interactable);
     }
+
 
     #endregion State Control ---------------------------------------------------------------
 
     
     #region Aiming ---------------------------------------------------------------
+    
+    public void OnAimEnter(IInteractable interactable)
+    {
+        interactable.OnAimEnter(this);
+        
+        if (_robot && currentAimedInteractable != null && currentAimedInteractable.RobotCanInteract)
+        {
+            interactable.SetHighlight(true);
+        }
+    }
+
+    public void OnAimStay(IInteractable interactable)
+    {
+        interactable.OnAimStay(this);
+        
+        if (_robot && currentAimedInteractable != null && currentAimedInteractable.RobotCanInteract && InputHandler.RobotInteractInput)
+        {
+            InputHandler.ConsumeRobotInteractBuffer();
+            _robot.InteractWith(currentAimedInteractable);
+        }
+    }
+
+    public void OnAimExit(IInteractable interactable)
+    {
+        interactable.OnAimExit(this);
+        if (_robot && currentAimedInteractable != null && currentAimedInteractable.RobotCanInteract)
+        {
+            interactable.SetHighlight(false);
+        }
+    }
+    
+    private void SetupLineRenderer()
+    {
+        // Initialize line renderer properties
+        _lineRenderer.positionCount = 2;
+        _lineRenderer.enabled = false;
+    }
+    private void UpdateAimRay()
+{
+    if (!IsAiming)
+    {
+        // Hide line renderer when not aiming
+        if (_lineRenderer.enabled)
+        {
+            _lineRenderer.enabled = false;
+            if (currentAimedInteractable != null)
+            {
+                OnAimExit(currentAimedInteractable);
+                currentAimedInteractable = null;
+            }
+        }
+        return;
+    }
+
+    // Show line renderer when aiming
+    if (!_lineRenderer.enabled)
+    {
+        _lineRenderer.enabled = true;
+    }
+
+    // Set ray origin (player position, slightly adjusted to match camera view)
+    Vector3 rayOrigin = transform.position + new Vector3(0, 0.5f, 0);
+    
+    // Get ray direction from camera
+    Vector3 rayDirection = _cameraManager.GetCameraAimDirection();
+    
+    // Set first point of line renderer
+    _lineRenderer.SetPosition(0, rayOrigin);
+    
+    // Create the actual ray for Physics raycasting
+    Ray aimRay = new Ray(rayOrigin, rayDirection);
+    
+    // Perform raycast to see if we hit anything
+    if (Physics.Raycast(aimRay, out RaycastHit hitInfo, aimRayMaxDistance, aimRayHitMask))
+    {
+        // Set second point of line renderer to hit position
+        _lineRenderer.SetPosition(1, hitInfo.point);
+        
+        // Check if the hit object implements IInteractable
+        if (hitInfo.collider.TryGetComponent(out IInteractable hitInteractable))
+        {
+            if (currentAimedInteractable != hitInteractable)
+            {
+                // Exit previous target if there was one
+                if (currentAimedInteractable != null)
+                {
+                    OnAimExit(currentAimedInteractable);
+                }
+                
+                // Set new target and enter it
+                currentAimedInteractable = hitInteractable;
+                OnAimEnter(currentAimedInteractable);
+            }
+            
+            // Update aim on current target
+            OnAimStay(currentAimedInteractable);
+        }
+        else if (currentAimedInteractable != null)
+        {
+            // We're no longer aiming at an interactable
+            OnAimExit(currentAimedInteractable);
+            currentAimedInteractable = null;
+        }
+    }
+    else
+    {
+        // No hit, set line end point to max distance
+        _lineRenderer.SetPosition(1, rayOrigin + (rayDirection * aimRayMaxDistance));
+        
+        // Clear current target if we had one
+        if (currentAimedInteractable != null)
+        {
+            OnAimExit(currentAimedInteractable);
+            currentAimedInteractable = null;
+        }
+    }
+}
     
     private void HandleCameraInputs()
     {
@@ -238,7 +360,7 @@ public class PlayerStateMachine : MonoBehaviour
                 _lastRotationDirection = initialAimDirection;
             
                 // Switch to aim camera
-                cameraManager.SwitchToAimCamera();
+                _cameraManager.SwitchToAimCamera();
             }
         }
         else if (IsAiming)
@@ -246,14 +368,14 @@ public class PlayerStateMachine : MonoBehaviour
             IsAiming = false;
             
             // Switch to free look camera
-            cameraManager.SwitchToFreeLookCamera();
+            _cameraManager.SwitchToFreeLookCamera();
         }
     }
     
     public Vector3 GetCameraAimDirection()
     {
-        if (!cameraManager) return transform.forward;
-        return cameraManager.GetCameraAimDirection();
+        if (!_cameraManager) return transform.forward;
+        return _cameraManager.GetCameraAimDirectionNoY();
     }
     
     public void HandleAimRotation()
@@ -268,7 +390,7 @@ public class PlayerStateMachine : MonoBehaviour
         float angleChange = Vector3.Angle(_lastRotationDirection, aimDirection);
         
         // Check if mouse movement exceeds our threshold
-        if (InputHandler.MouseDelta.magnitude > cameraManager.AimRotationThreshold || angleChange > 1.0f)
+        if (InputHandler.MouseDelta.magnitude > _cameraManager.AimRotationThreshold || angleChange > 1.0f)
         {
             // There's significant mouse movement, so update the character rotation
             Quaternion targetRotation = Quaternion.LookRotation(aimDirection);
@@ -289,20 +411,7 @@ public class PlayerStateMachine : MonoBehaviour
     
     
     #region Movement ---------------------------------------------------------------
-
-    public void SetCharacterHeight(bool crouching)
-    {
-        if (crouching)
-        {
-            _controller.height = _crouchCharacterHeight;
-            _controller.center = _crouchCharacterCenter;
-        }
-        else
-        {
-            _controller.height = _defaultCharacterHeight;
-            _controller.center = _defaultCharacterCenter;
-        }
-    }
+    
     private void MoveCharacter()
     {
         // Create movement vector using the active properties
@@ -328,15 +437,6 @@ public class PlayerStateMachine : MonoBehaviour
             targetRotation,
             baseSpeed * multiplier * Time.fixedDeltaTime * 100f
         );
-    }
-    
-    private void UpdateFallTime()
-    {
-        // Only increment fall time when moving downward
-        if (!IsGrounded && CurrentState != JumpingState)
-        {
-            FallTime += Time.deltaTime;
-        }
     }
     
     public float CalculateGravityVelocity(float currentVelocity, float deltaTime)
@@ -376,8 +476,8 @@ public class PlayerStateMachine : MonoBehaviour
     
     public Vector3 CalculateMoveDirection()
     {
-        if (!cameraManager) return transform.forward;
-        return cameraManager.CalculateMoveDirection(InputHandler.MovementInput);
+        if (!_cameraManager) return transform.forward;
+        return _cameraManager.CalculateMoveDirection(InputHandler.MovementInput);
     }
     
     #endregion Movement ---------------------------------------------------------------
@@ -388,6 +488,28 @@ public class PlayerStateMachine : MonoBehaviour
     
     #region Utility ---------------------------------------------------------------
 
+    private void UpdateFallTime()
+    {
+        // Only increment fall time when moving downward
+        if (!IsGrounded && CurrentState != JumpingState)
+        {
+            FallTime += Time.deltaTime;
+        }
+    }
+    public void SetCharacterHeight(bool crouching)
+    {
+        if (crouching)
+        {
+            _controller.height = _crouchCharacterHeight;
+            _controller.center = _crouchCharacterCenter;
+        }
+        else
+        {
+            _controller.height = _defaultCharacterHeight;
+            _controller.center = _defaultCharacterCenter;
+        }
+    }
+    
     private void UpdateDebugText()
     {
         if (!debugText) return;
@@ -400,8 +522,9 @@ public class PlayerStateMachine : MonoBehaviour
                          $"FallTime: {FallTime}\n" +
                          $"LandingIntensity: {LandingIntensity}\n" +
                          $"MoveDirection: {activeMoveDirection}\n" +
-                         $"ActiveMoveSpeed: {activeHorizontalVelocity}\n" +
-                         $"MouseDelta: {InputHandler.MouseDelta.magnitude}\n" +
+                         $"Interactable: {currentInteractable}\n" +
+                         $"AimedInteractable: {currentAimedInteractable}\n" +
+                         $"ActiveHorizontalSpeed: {activeHorizontalVelocity}\n" +
                          $"ActiveVerticalVelocity: {activeVerticalVelocity}\n";
     }
     

@@ -107,7 +107,7 @@ public class CameraManager : MonoBehaviour
         return aimCamera.Priority > freeLookCamera.Priority;
     }
 
-    public Vector3 GetCameraAimDirection()
+    public Vector3 GetCameraAimDirectionNoY()
     {
         // Use the active camera to determine the aim direction
         Transform activeCameraTransform = IsAimCameraActive() 
@@ -119,6 +119,28 @@ public class CameraManager : MonoBehaviour
         // Get forward direction and flatten it
         Vector3 cameraForward = activeCameraTransform.forward;
         cameraForward.y = 0; // Remove vertical tilt
+
+        // Validate direction
+        if (cameraForward.sqrMagnitude < 0.001f)
+            return _lastAimDirection;
+
+        // Normalize and store
+        cameraForward.Normalize();
+        _lastAimDirection = cameraForward;
+        return cameraForward;
+    }
+    
+    public Vector3 GetCameraAimDirection()
+    {
+        // Use the active camera to determine the aim direction
+        Transform activeCameraTransform = IsAimCameraActive() 
+            ? aimCamera.transform 
+            : freeLookCamera.transform;
+
+        if (!activeCameraTransform) return _lastAimDirection; // Fallback if camera missing
+
+        // Get forward direction
+        Vector3 cameraForward = activeCameraTransform.forward;
 
         // Validate direction
         if (cameraForward.sqrMagnitude < 0.001f)

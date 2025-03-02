@@ -134,7 +134,7 @@ public class PlayerGroundedState : PlayerBaseState
         // Interact
         if (StateMachine.CanInteract && StateMachine.InputHandler.PlayerInteractInput)
         {
-            StateMachine.currentInteractable.Interact(StateMachine.gameObject);
+            StateMachine.currentInteractable.OnInteractionStart(StateMachine.gameObject);
             StateMachine.SwitchState(StateMachine.InteractingState);
             return;
         }
