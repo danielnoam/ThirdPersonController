@@ -11,7 +11,11 @@ public class TestManager : MonoBehaviour
     [SerializeField, ReadOnly] private GameObject currentEnvironment;
     [SerializeField, ReadOnly] private PlayerStateMachine currentPlayer;
     [SerializeField, ReadOnly] private RobotCompanion currentRobot;
-
+    [SerializeField, ReadOnly] private Transform currentCheckpoint;
+    
+    
+    
+    
     private void Start()
     {
         currentPlayer = FindFirstObjectByType<PlayerStateMachine>();
@@ -67,8 +71,6 @@ public class TestManager : MonoBehaviour
         
     }
     
-    
-    
     private IEnumerator LoadTest(int testIndex)
     {
         if (tests.Length <= 0 || testIndex >= tests.Length) yield break;
@@ -90,12 +92,10 @@ public class TestManager : MonoBehaviour
         Debug.Log("Unloaded " + currentTest.GetName());
         Destroy(currentEnvironment);
         currentTest = null;
+        currentEnvironment = null;
+        currentCheckpoint = null;
         
     }
-    
-    
-    
-    
     
     
     private void TeleportPlayer(Vector3 position)
@@ -108,6 +108,25 @@ public class TestManager : MonoBehaviour
     {
         if (!currentTest || !currentRobot) return;
         currentRobot.transform.position = position;
+    }
+
+    private void OnPlayerDeath()
+    {
+        if (!currentCheckpoint)
+        {
+            TeleportPlayer(currentTest.GetSpawnPoint());
+            TeleportRobot(currentTest.GetSpawnPoint() + new Vector3(0, 0, 2));
+        }
+        else
+        {
+            TeleportPlayer(currentCheckpoint.position);
+            TeleportRobot(currentCheckpoint.position + new Vector3(0, 0, 2));
+        }
+    }
+
+    private void OnCheckpointReached(Transform checkpoint)
+    {
+        currentCheckpoint = checkpoint;
     }
     
 }

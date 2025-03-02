@@ -804,7 +804,7 @@ public class RobotCompanion : MonoBehaviour
 
    private bool CanCommend()
    {
-           return IsOn() && currentState != RobotState.Interacting;
+           return IsOn();
    }
 
    public void OnInteractionComplete(IInteractable interactable)

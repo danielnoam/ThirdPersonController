@@ -9,7 +9,6 @@ public class SOTest : ScriptableObject
     [SerializeField, Min(0)] private int timeToLoad = 1;
     [SerializeField, Min(0)] private int timeToUnload = 1;
     [SerializeField] private GameObject prefab;
-    [SerializeField] private Transform spawnPoint;
     
     
     public string GetName()
@@ -44,11 +43,18 @@ public class SOTest : ScriptableObject
     
     public Vector3 GetSpawnPoint()
     {
-        if (!spawnPoint)
+        if (!prefab)
         {
-            Debug.Log("No spawn point set for " + name);
+            Debug.Log("No prefab set for " + name);
             return Vector3.up;
         }
-        return spawnPoint.position;
+        
+        if (!prefab.TryGetComponent(out TestSpawnPosition spawnPosition))
+        {
+            Debug.Log("No TestSpawnPosition set for " + name);
+            return Vector3.up;
+        }
+
+        return spawnPosition.transform.position;
     }
 }

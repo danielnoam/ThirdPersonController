@@ -22,7 +22,6 @@ public class CameraManager : MonoBehaviour
     
     
     
-    // Reference to player input for camera controls
     private PlayerInputHandler _playerInputHandler;
     private Vector3 _lastAimDirection = Vector3.forward;
     private float _pitchAccumulation = 0f;

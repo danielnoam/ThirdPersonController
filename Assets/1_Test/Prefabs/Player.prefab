@@ -205,8 +205,8 @@ MonoBehaviour:
   maxFallTime: 2
   recoveryDuration: 1
   minMovementControl: 0.1
-  groundCheckRadius: 0.23
-  groundCheckOffset: {x: 0, y: -0.75, z: 0}
+  environmentCheckRadius: -0.75
+  environmentCheckOffset: {x: 0, y: -0.75, z: 0}
   environmentLayer:
     serializedVersion: 2
     m_Bits: 1
@@ -214,6 +214,7 @@ MonoBehaviour:
   aimRayHitMask:
     serializedVersion: 2
     m_Bits: 512
+  aimRayStartPosition: {fileID: 7580408597919689472}
   debugText: {fileID: 0}
 --- !u!120 &5222702382175107558
 LineRenderer:
@@ -414,5 +415,10 @@ PrefabInstance:
 --- !u!4 &2381188618167646215 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 909c0d9961c561c4d936d29d32927c41, type: 3}
+  m_PrefabInstance: {fileID: 2774524219561123820}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &7580408597919689472 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -3480699329000672020, guid: 909c0d9961c561c4d936d29d32927c41, type: 3}
   m_PrefabInstance: {fileID: 2774524219561123820}
   m_PrefabAsset: {fileID: 0}

@@ -61,19 +61,20 @@ public class PlayerStateMachine : MonoBehaviour
     [Tooltip("Percentage of movement control retained during landing recovery")]
     public float minMovementControl = 0.1f;
 
+
     [Header("Collision Check")]
-    [Tooltip("Radius of the sphere used to detect ground")]
-    [SerializeField] private float groundCheckRadius = 0.23f;
-    [Tooltip("Offset from character position for ground detection")]
-    [SerializeField] private Vector3 groundCheckOffset = new Vector3(0, -0.1f, 0);
+    [Tooltip("Radius of the sphere used to detect environment")]
+    [SerializeField] private float environmentCheckRadius = -0.75f;
+    [Tooltip("Offset from character position for environment detection")]
+    [SerializeField] private Vector3 environmentCheckOffset = new Vector3(0, -0.1f, 0);
     [Tooltip("Layer mask defining what objects count as environment")]
     [SerializeField] private LayerMask environmentLayer = 1;
-    
-    [Header("Aim Ray")]
     [Tooltip("Maximum distance the aim ray will travel")]
     public float aimRayMaxDistance = 20f;
     [Tooltip("Layer mask for objects that can be hit by the aim ray")]
-    public LayerMask aimRayHitMask;
+    public LayerMask aimRayHitMask= 1;
+    [Tooltip("The start position of the aim ray")]
+    public Transform aimRayStartPosition;
 
     [Header("References")] 
     [SerializeField] private TextMeshProUGUI debugText;
@@ -108,7 +109,6 @@ public class PlayerStateMachine : MonoBehaviour
     private void Awake()
     {
         _lineRenderer = GetComponent<LineRenderer>();
-        SetupLineRenderer();
         _controller = GetComponent<CharacterController>();
         InputHandler = GetComponent<PlayerInputHandler>();
         GroundedState = new PlayerGroundedState(this);
@@ -120,6 +120,7 @@ public class PlayerStateMachine : MonoBehaviour
         _defaultCharacterHeight = _controller.height;
         _defaultCharacterCenter = _controller.center;
         
+        SetupLineRenderer();
         SwitchState(GroundedState);
     }
 
@@ -157,11 +158,11 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void CheckCollisions()
     {
-        Vector3 groundSpherePosition = transform.position + groundCheckOffset;
-        IsGrounded = Physics.CheckSphere(groundSpherePosition, groundCheckRadius, environmentLayer);
+        Vector3 groundSpherePosition = transform.position + environmentCheckOffset;
+        IsGrounded = Physics.CheckSphere(groundSpherePosition, environmentCheckRadius, environmentLayer);
         
-        Vector3 ceilingSpherePosition = transform.position - groundCheckOffset;
-        CanStand = !Physics.CheckSphere(ceilingSpherePosition, groundCheckRadius, environmentLayer);
+        Vector3 ceilingSpherePosition = transform.position - environmentCheckOffset;
+        CanStand = !Physics.CheckSphere(ceilingSpherePosition, environmentCheckRadius, environmentLayer);
     }
     
     
@@ -229,13 +230,9 @@ public class PlayerStateMachine : MonoBehaviour
     
     public void OnAimEnter(IInteractable interactable)
     {
-        interactable.OnAimEnter(this);
-        
-        if (_robot && currentAimedInteractable != null && currentAimedInteractable.RobotCanInteract)
+        if (_robot && currentAimedInteractable is { RobotCanInteract: true })
         {
-            interactable.SetHighlight(true);
-            Debug.Log("Highlighting");
-            
+            interactable.OnAimEnter(this);
         }
     }
 
@@ -243,7 +240,7 @@ public class PlayerStateMachine : MonoBehaviour
     {
         interactable.OnAimStay(this);
         
-        if (_robot && currentAimedInteractable != null && currentAimedInteractable.RobotCanInteract && InputHandler.RobotInteractInput)
+        if (_robot && currentAimedInteractable is { RobotCanInteract: true } && InputHandler.RobotInteractInput)
         {
             InputHandler.ConsumeRobotInteractBuffer();
             _robot.InteractWith(currentAimedInteractable);
@@ -253,10 +250,6 @@ public class PlayerStateMachine : MonoBehaviour
     public void OnAimExit(IInteractable interactable)
     {
         interactable.OnAimExit(this);
-        if (_robot && currentAimedInteractable != null && currentAimedInteractable.RobotCanInteract)
-        {
-            interactable.SetHighlight(false);
-        }
     }
     
     private void SetupLineRenderer()
@@ -289,7 +282,11 @@ public class PlayerStateMachine : MonoBehaviour
     }
 
     // Set ray origin (player position, slightly adjusted to match camera view)
-    Vector3 rayOrigin = transform.position + new Vector3(0, 0.5f, 0);
+    Vector3 rayOrigin = transform.position;
+    if (aimRayStartPosition)
+    {
+        rayOrigin = aimRayStartPosition.position;
+    }
     
     // Get ray direction from camera
     Vector3 rayDirection = _cameraManager.GetCameraAimDirection();
@@ -542,13 +539,13 @@ public class PlayerStateMachine : MonoBehaviour
         {
             Gizmos.color = Color.red;
         }
-        Vector3 groundSpherePosition = transform.position + groundCheckOffset;
-        Gizmos.DrawWireSphere(groundSpherePosition, groundCheckRadius);
+        Vector3 groundSpherePosition = transform.position + environmentCheckOffset;
+        Gizmos.DrawWireSphere(groundSpherePosition, environmentCheckRadius);
         
         // Ceiling sphere
         Gizmos.color = CanStand ? Color.green : Color.red;
-        Vector3 ceilingSpherePosition = transform.position - groundCheckOffset;
-        Gizmos.DrawWireSphere(ceilingSpherePosition, groundCheckRadius);
+        Vector3 ceilingSpherePosition = transform.position - environmentCheckOffset;
+        Gizmos.DrawWireSphere(ceilingSpherePosition, environmentCheckRadius);
     }
 
     #endregion Utility ---------------------------------------------------------------
