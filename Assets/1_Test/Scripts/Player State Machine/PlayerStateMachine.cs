@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 
 [RequireComponent(typeof(PlayerInputHandler))]
@@ -60,13 +61,13 @@ public class PlayerStateMachine : MonoBehaviour
     [Tooltip("Percentage of movement control retained during landing recovery")]
     public float minMovementControl = 0.1f;
 
-    [Header("Ground Check")]
+    [Header("Collision Check")]
     [Tooltip("Radius of the sphere used to detect ground")]
     [SerializeField] private float groundCheckRadius = 0.23f;
     [Tooltip("Offset from character position for ground detection")]
     [SerializeField] private Vector3 groundCheckOffset = new Vector3(0, -0.1f, 0);
-    [Tooltip("Layer mask defining what objects count as ground")]
-    [SerializeField] private LayerMask groundLayer = 1;
+    [Tooltip("Layer mask defining what objects count as environment")]
+    [SerializeField] private LayerMask environmentLayer = 1;
 
     [Header("References")] 
     [SerializeField] private RobotCompanion robot;
@@ -146,13 +147,13 @@ public class PlayerStateMachine : MonoBehaviour
     private void CheckGrounded()
     {
         Vector3 spherePosition = transform.position + groundCheckOffset;
-        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
+        IsGrounded = Physics.CheckSphere(spherePosition, groundCheckRadius, environmentLayer);
     }
 
     private void CheckCeiling()
     {
         Vector3 spherePosition = transform.position - groundCheckOffset;
-        CanStand = !Physics.CheckSphere(spherePosition, groundCheckRadius, groundLayer);
+        CanStand = !Physics.CheckSphere(spherePosition, groundCheckRadius, environmentLayer);
     }
     
     private void OnTriggerEnter(Collider other)
