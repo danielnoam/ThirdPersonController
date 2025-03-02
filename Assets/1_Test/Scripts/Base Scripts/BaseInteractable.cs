@@ -16,7 +16,6 @@ public abstract class BaseInteractable : MonoBehaviour, IInteractable
     [Header("Feedback")]
     [SerializeField] protected GameObject gfxObject;
     [SerializeField] protected Color highlightColor = Color.yellow;
-    [SerializeField] protected Color aimHighlightColor = Color.red;
     
     [Header("Base Events")]
     [SerializeField] protected UnityEvent onInteractStartEvents;
@@ -148,7 +147,7 @@ public abstract class BaseInteractable : MonoBehaviour, IInteractable
     {
         if (highlighted && !CanInteract) return;
         
-        if (_meshRenderer && !_isAimedAt) // Don't override aim highlight
+        if (_meshRenderer) // Don't override aim highlight
         {
             _meshRenderer.material.color = highlighted ? highlightColor : _originalColor;
         }
@@ -159,7 +158,7 @@ public abstract class BaseInteractable : MonoBehaviour, IInteractable
     /// </summary>
     public virtual bool IsHighlighted()
     {
-        return _meshRenderer && (_meshRenderer.material.color == highlightColor || _meshRenderer.material.color == aimHighlightColor);
+        return _meshRenderer && (_meshRenderer.material.color == highlightColor);
     }
 
     /// <summary>

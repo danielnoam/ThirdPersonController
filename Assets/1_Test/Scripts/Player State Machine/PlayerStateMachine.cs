@@ -149,7 +149,7 @@ public class PlayerStateMachine : MonoBehaviour
     private void FixedUpdate()
     {
         CurrentState.FixedUpdateState();
-        MoveCharacter(); // Apply movement every fixed update
+        MoveCharacter(); 
     }
     
     
@@ -234,6 +234,8 @@ public class PlayerStateMachine : MonoBehaviour
         if (_robot && currentAimedInteractable != null && currentAimedInteractable.RobotCanInteract)
         {
             interactable.SetHighlight(true);
+            Debug.Log("Highlighting");
+            
         }
     }
 
@@ -481,9 +483,6 @@ public class PlayerStateMachine : MonoBehaviour
     }
     
     #endregion Movement ---------------------------------------------------------------
-
-    
-    
     
     
     #region Utility ---------------------------------------------------------------

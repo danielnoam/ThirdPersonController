@@ -3043,6 +3043,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: df63db802e516df4784a7b51bed7cfa5, type: 3}
+--- !u!1 &1872269974149468573 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5879472811423644759, guid: df63db802e516df4784a7b51bed7cfa5, type: 3}
+  m_PrefabInstance: {fileID: 5216213729908501962}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &6229443444841910078 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2166472278060442356, guid: df63db802e516df4784a7b51bed7cfa5, type: 3}
@@ -3053,7 +3058,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 4432918703769448186, guid: df63db802e516df4784a7b51bed7cfa5, type: 3}
   m_PrefabInstance: {fileID: 5216213729908501962}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 1872269974149468573}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 90bc06b4d52a75b4cac228f61b5f99bb, type: 3}
@@ -3426,7 +3431,7 @@ PrefabInstance:
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[0].onState.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
-      objectReference: {fileID: 8495850289254548272}
+      objectReference: {fileID: 1872269974149468573}
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[1].onState.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
@@ -3441,7 +3446,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[0].onState.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: TurnOn
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[1].onState.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
@@ -3449,7 +3454,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[0].onState.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
-      value: RobotCompanion, Assembly-CSharp
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[1].onState.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
@@ -3457,7 +3462,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[0].onState.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
-      value: UnityEngine.Object, UnityEngine
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 7594036246142037512, guid: 3ed922aa09685d949942bf5a04386872, type: 3}
       propertyPath: states.Array.data[1].onState.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
