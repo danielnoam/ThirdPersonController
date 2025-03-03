@@ -64,9 +64,11 @@ public class PlayerStateMachine : MonoBehaviour
 
     [Header("Collision Check")]
     [Tooltip("Radius of the sphere used to detect environment")]
-    [SerializeField] private float environmentCheckRadius = -0.75f;
-    [Tooltip("Offset from character position for environment detection")]
-    [SerializeField] private Vector3 environmentCheckOffset = new Vector3(0, -0.1f, 0);
+    [SerializeField] private float environmentCheckRadius = 0.3f;
+    [Tooltip("Offset from character position for ground detection")]
+    [SerializeField] private Vector3 groundCheckOffset = new Vector3(0, -0.7f, 0);
+    [Tooltip("Offset from character position for ceiling detection")]
+    [SerializeField] private Vector3 ceilingCheckOffset = new Vector3(0, 0.63f, 0);
     [Tooltip("Layer mask defining what objects count as environment")]
     [SerializeField] private LayerMask environmentLayer = 1;
     [Tooltip("Maximum distance the aim ray will travel")]
@@ -133,12 +135,10 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void Update()
     {
-        if (_cameraManager)
+        if (!IsAiming && currentInteractable == null && _robot && _robot.CanCommend() && InputHandler.RobotInteractInput)
         {
-            _cameraManager.UpdateCameraPosition(transform.position);
-            _cameraManager.HandleCameraRotation();
+            _robot.FollowPlayer();
         }
-        
         CheckCollisions();
         UpdateFallTime();
         UpdateAimRay();
@@ -158,10 +158,10 @@ public class PlayerStateMachine : MonoBehaviour
 
     private void CheckCollisions()
     {
-        Vector3 groundSpherePosition = transform.position + environmentCheckOffset;
+        Vector3 groundSpherePosition = transform.position + groundCheckOffset;
         IsGrounded = Physics.CheckSphere(groundSpherePosition, environmentCheckRadius, environmentLayer);
         
-        Vector3 ceilingSpherePosition = transform.position - environmentCheckOffset;
+        Vector3 ceilingSpherePosition = transform.position + ceilingCheckOffset;
         CanStand = !Physics.CheckSphere(ceilingSpherePosition, environmentCheckRadius, environmentLayer);
     }
     
@@ -539,12 +539,12 @@ public class PlayerStateMachine : MonoBehaviour
         {
             Gizmos.color = Color.red;
         }
-        Vector3 groundSpherePosition = transform.position + environmentCheckOffset;
+        Vector3 groundSpherePosition = transform.position + groundCheckOffset;
         Gizmos.DrawWireSphere(groundSpherePosition, environmentCheckRadius);
         
         // Ceiling sphere
         Gizmos.color = CanStand ? Color.green : Color.red;
-        Vector3 ceilingSpherePosition = transform.position - environmentCheckOffset;
+        Vector3 ceilingSpherePosition = transform.position + ceilingCheckOffset;
         Gizmos.DrawWireSphere(ceilingSpherePosition, environmentCheckRadius);
     }
 

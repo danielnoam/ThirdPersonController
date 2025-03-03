@@ -46,6 +46,12 @@ public class CameraManager : MonoBehaviour
         freeLookCamera.Priority = freeLookCameraPriority + 5; // Start with free look as active camera
         aimCamera.Priority = freeLookCameraPriority;
     }
+    
+    private void Update()
+    {
+        HandleCameraRotation();
+        UpdateCameraPosition();
+    }
 
     public void Initialize(PlayerInputHandler playerInputHandler)
     {
@@ -53,15 +59,15 @@ public class CameraManager : MonoBehaviour
         freeLookCamera.Follow = playerInputHandler.transform;
     }
 
-    public void UpdateCameraPosition(Vector3 playerPosition)
+    private void UpdateCameraPosition()
     {
         // Update aim core position to follow the player
-        if (!aimCore) return;
+        if (!aimCore || !_playerInputHandler) return;
         
-        aimCore.transform.position = playerPosition;
+        aimCore.transform.position = _playerInputHandler.transform.position;
     }
 
-    public void HandleCameraRotation()
+    private void HandleCameraRotation()
     {
         if (!_playerInputHandler) return;
 

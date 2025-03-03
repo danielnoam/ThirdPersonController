@@ -47,3 +47,10 @@ MonoBehaviour:
   tests:
   - {fileID: 11400000, guid: 53a0d185f0ce90c42983e01be28687a9, type: 2}
   - {fileID: 11400000, guid: 18150bf0e0cba4747849f9516c41bb0e, type: 2}
+  playerPrefab: {fileID: 5929691532129443097, guid: 7113d65132abc894daea15c16ab13751, type: 3}
+  robotPrefab: {fileID: 5879472811423644759, guid: df63db802e516df4784a7b51bed7cfa5, type: 3}
+  currentTest: {fileID: 0}
+  currentEnvironment: {fileID: 0}
+  currentPlayer: {fileID: 0}
+  currentRobot: {fileID: 0}
+  currentCheckpoint: {fileID: 0}

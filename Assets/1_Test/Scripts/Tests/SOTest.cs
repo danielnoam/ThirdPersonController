@@ -48,13 +48,33 @@ public class SOTest : ScriptableObject
             Debug.Log("No prefab set for " + name);
             return Vector3.up;
         }
-        
-        if (!prefab.TryGetComponent(out TestSpawnPosition spawnPosition))
+
+        TestSpawnPlatform spawnPlatform = prefab.GetComponentInChildren<TestSpawnPlatform>();
+        if (!spawnPlatform)
         {
-            Debug.Log("No TestSpawnPosition set for " + name);
+            Debug.Log("No TestSpawnPosition in " + name);
             return Vector3.up;
         }
 
-        return spawnPosition.transform.position;
+        return spawnPlatform.transform.position;
     }
+
+    public bool HasRobot()
+    {
+        if (!prefab)
+        {
+            Debug.Log("No prefab set for " + name);
+            return false;
+        }
+
+        RobotCompanion robot = prefab.GetComponentInChildren<RobotCompanion>();
+        if (!robot)
+        {
+            Debug.Log("No RobotCompanion in " + name);
+            return false;
+        }
+
+        return true;
+    }
+    
 }

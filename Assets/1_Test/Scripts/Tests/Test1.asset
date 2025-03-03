@@ -14,7 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   name: Test 1
   description: This is a test
-  timeToLoad: 3
-  timeToUnload: 3
+  timeToLoad: 1
+  timeToUnload: 1
   prefab: {fileID: 4701224180201935342, guid: b373ba1c48150514c82145f42d06bc63, type: 3}
-  spawnPoint: {fileID: 0}

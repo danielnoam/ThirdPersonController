@@ -130,8 +130,11 @@ public class PressurePlate : BaseInteractable
     
     public override void OnAimEnter(PlayerStateMachine player)
     {
-        base.OnAimEnter(player);
-        SetHighlight(true);
+        
+        if (!_isActivated)
+        {
+            base.OnAimEnter(player);
+        }
     }
     
     public override void OnAimExit(PlayerStateMachine player)

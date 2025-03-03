@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 2916035354926079562}
   - component: {fileID: 1433868013993932608}
   - component: {fileID: 771118421257008140}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Cylinder (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -97,7 +97,7 @@ GameObject:
   - component: {fileID: 3049065107692725924}
   - component: {fileID: 8532909211907471645}
   - component: {fileID: 2682667714632218391}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Cylinder (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -183,7 +183,7 @@ GameObject:
   - component: {fileID: 7418069530979491829}
   - component: {fileID: 8247980419499865571}
   - component: {fileID: 2205448148630468278}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Body
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -269,7 +269,7 @@ GameObject:
   - component: {fileID: 3496404712764161927}
   - component: {fileID: 6026187158545299600}
   - component: {fileID: 8811411681209862132}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Directional Light
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -390,7 +390,7 @@ GameObject:
   - component: {fileID: 4707711408890963151}
   - component: {fileID: 1342251781003369864}
   - component: {fileID: 8493420741173181121}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Eye
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -478,7 +478,7 @@ GameObject:
   - component: {fileID: 7216424626492076193}
   - component: {fileID: 3648063352551605096}
   - component: {fileID: 4432918703769448186}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Robot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -598,7 +598,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   verticalMoveSpeed: 5
-  sitDownSpeed: 3
+  sitDownSpeed: 2
   minEnvironmentClearance: 0.5
   baseHeight: 1.5
   heightAdjustmentDelay: 1
@@ -694,7 +694,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6631523453387643233}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: LeftEarPivot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -728,7 +728,7 @@ GameObject:
   - component: {fileID: 5612748022774488601}
   - component: {fileID: 6522489062031045957}
   - component: {fileID: 7482141618035437021}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Inside
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -813,7 +813,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5380237225979921613}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: RightEarPivot
   m_TagString: Untagged
   m_Icon: {fileID: 0}

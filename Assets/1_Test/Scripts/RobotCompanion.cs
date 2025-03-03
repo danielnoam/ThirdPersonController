@@ -152,7 +152,7 @@ public class RobotCompanion : MonoBehaviour
            _defaultEyeLightColor = eyeLight.color;
            _fullEyeLightIntensity = eyeLight.intensity;
        }
-
+       currentBattery = fullBattery;
    }
 
    private void Start()
@@ -160,8 +160,6 @@ public class RobotCompanion : MonoBehaviour
        _player = GameObject.Find("Player").GetComponent<PlayerStateMachine>();
        _playerTransform = _player.transform;
        _playerFollowPosition = _playerTransform.GetChild(2);
-       currentBattery = fullBattery;
-       TurnOff();
    }
 
 
@@ -193,7 +191,8 @@ public class RobotCompanion : MonoBehaviour
                    break;
                case RobotState.FollowingPlayer:
                    AdjustHeight();
-                   Follow();
+                   Move(_playerFollowPosition);
+                   // Follow();
                    break;
                case RobotState.Idle:
                    AdjustHeight();
@@ -217,6 +216,11 @@ public class RobotCompanion : MonoBehaviour
    public void InteractWith(IInteractable interactable)
    {
        if (!CanCommend()) return;
+
+       if (currentState == RobotState.Sitting)
+       {
+           Idle();
+       }
     
        // Store the current interactable
        _currentInteractable = interactable;
@@ -288,6 +292,8 @@ public class RobotCompanion : MonoBehaviour
    [Button]
    public void TurnOn()
    {
+       if (currentBattery <= 0) return;
+       
        currentState = RobotState.Idle;
        rigidBody.useGravity = false;
        rigidBody.isKinematic = false;
@@ -307,9 +313,10 @@ public class RobotCompanion : MonoBehaviour
        if (heightDifference <= 0.01f)
        {
            // We've reached the sitting position
-           rigidBody.isKinematic = true; // Now lock it in place
            transform.position = new Vector3(transform.position.x, _targetSitHeight, transform.position.z);
            rigidBody.linearVelocity = Vector3.zero;
+           rigidBody.useGravity = false;
+           rigidBody.isKinematic = true; 
            return;
        }
 
@@ -530,7 +537,7 @@ public class RobotCompanion : MonoBehaviour
    private void ApplyFriction()
    {
        // Only apply friction when there's no target
-       if (_target)
+       if (_target || !rigidBody.isKinematic)
        {
            // Get current velocity
            Vector3 currentVelocity = rigidBody.linearVelocity;
@@ -623,10 +630,25 @@ public class RobotCompanion : MonoBehaviour
     
        if (currentState == RobotState.FollowingPlayer)
        {
-           // If we have a target, calculate rotation to face it
            Vector3 directionToTarget = ((_player.transform.position + new Vector3(0,0.5f, 0)) - transform.position).normalized;
            targetRotation = Quaternion.LookRotation(directionToTarget);
            
+       }
+       else if (currentState == RobotState.GoToTarget && _target)
+       {
+           Vector3 directionToTarget = (_target.position - transform.position).normalized;
+           targetRotation = Quaternion.LookRotation(directionToTarget);
+       }
+       else if (currentState == RobotState.Idle && _player)
+       {
+           Vector3 directionToTarget = ((_player.transform.position + new Vector3(0,0.5f, 0)) - transform.position).normalized;
+           targetRotation = Quaternion.LookRotation(directionToTarget);
+
+       }
+       else if (currentState == RobotState.Interacting && _target)
+       {
+           Vector3 directionToTarget = (_target.position - transform.position).normalized;
+           targetRotation = Quaternion.LookRotation(directionToTarget);
        }
        else
        {
@@ -770,7 +792,6 @@ public class RobotCompanion : MonoBehaviour
        // Calculate distance to target (horizontal only)
        Vector3 targetPosition = new Vector3(_target.position.x, transform.position.y, _target.position.z);
        float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
-       print("Distance to target: " + distanceToTarget);
     
        // If we're close enough to the target
        if (distanceToTarget <= _interactDistance)
@@ -786,13 +807,11 @@ public class RobotCompanion : MonoBehaviour
             
                // Perform the interaction
                _currentInteractable.OnInteractionStart(gameObject);
-               print("Interacting with " + _currentInteractable);
            }
            else
            {
                // No interactable, just go to idle
                Idle();
-               print("Reached target but no interactable object found");
            }
        }
    }
@@ -802,9 +821,9 @@ public class RobotCompanion : MonoBehaviour
        return  currentState != RobotState.Off && currentBattery > 0;
    }
 
-   private bool CanCommend()
+   public bool CanCommend()
    {
-           return IsOn();
+       return IsOn();
    }
 
    public void OnInteractionComplete(IInteractable interactable)
